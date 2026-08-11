@@ -1,0 +1,209 @@
+{
+  "extName": {
+    "message": "TrickyBird Web Proxy"
+  },
+  "extDesc": {
+    "message": "A web proxy for one browser tab. When a page will not open, TrickyBird fetches it for you and opens it in that tab."
+  },
+  "menuRoute": {
+    "message": "Open with TrickyBird"
+  },
+  "badgeBusy": {
+    "message": "TrickyBird is connecting"
+  },
+  "badgeAttention": {
+    "message": "Click the TrickyBird icon to see what happened with this tab."
+  },
+  "popupFooterManage": {
+    "message": "Settings"
+  },
+  "footerSupport": {
+    "message": "Support"
+  },
+  "footerTerms": {
+    "message": "Terms"
+  },
+  "footerPrivacy": {
+    "message": "Privacy"
+  },
+  "footerStatus": {
+    "message": "Status"
+  },
+  "optionsVersion": {
+    "message": "Version $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.0.3"
+      }
+    }
+  },
+  "popupLaunchHeading": {
+    "message": "Nothing on this page to open"
+  },
+  "popupLaunchBody": {
+    "message": "Browser pages and files on this computer cannot be opened with TrickyBird. Our site takes an address and opens it for you."
+  },
+  "popupLaunchAction": {
+    "message": "Go to TrickyBird"
+  },
+  "popupLaunchHelper": {
+    "message": "It opens in a new tab. This one is left as it is."
+  },
+  "popupFirstRunHeading": {
+    "message": "Open this page with TrickyBird"
+  },
+  "popupFirstRunBody": {
+    "message": "TrickyBird is a web proxy. It fetches the site for you, so the request to the site goes out from our server, not from your browser. The page then opens here, in this tab."
+  },
+  "popupFirstRunTradeHeading": {
+    "message": "What changes in this tab"
+  },
+  "popupFirstRunTradeServers": {
+    "message": "Our servers fetch the page, rewrite its links before you see it, and get what you type or send there."
+  },
+  "popupFirstRunTradeAddress": {
+    "message": "The address bar shows an address of ours, not the site’s. Sometimes it is just numbers."
+  },
+  "popupFirstRunTradeCookies": {
+    "message": "That site’s cookies stay on our server, not in your browser, so you may need to sign in again."
+  },
+  "popupFirstRunTradeRequest": {
+    "message": "We get the address first, even if the page fails to open."
+  },
+  "popupIdleState": {
+    "message": "Your browser fetches this page"
+  },
+  "popupIdleAction": {
+    "message": "Open with TrickyBird"
+  },
+  "popupIdleHelper": {
+    "message": "This tab reloads and our servers fetch the page. Nothing else changes, and one click here puts it back."
+  },
+  "popupOfferLinkHeading": {
+    "message": "Open this link with TrickyBird"
+  },
+  "popupOfferLinkBody": {
+    "message": "TrickyBird fetches it through our servers and opens it right here, in this tab."
+  },
+  "popupOfferFailedHeading": {
+    "message": "This page didn’t open"
+  },
+  "popupOfferFailedBody": {
+    "message": "Your browser couldn’t reach $SITE$. TrickyBird can try fetching it through our servers and opening it right here instead.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "popupOfferAction": {
+    "message": "Open it with TrickyBird"
+  },
+  "popupOfferSecondary": {
+    "message": "Not now"
+  },
+  "popupConnectingStatus": {
+    "message": "Connecting…"
+  },
+  "popupRoutedStatus": {
+    "message": "TrickyBird fetches this page"
+  },
+  "popupRoutedAction": {
+    "message": "Stop going through TrickyBird"
+  },
+  "popupRoutedHelper": {
+    "message": "When you stop, the page reloads straight from the site. Closing this tab stops it too."
+  },
+  "popupStaleHeading": {
+    "message": "This page didn’t come from TrickyBird"
+  },
+  "popupStaleBody": {
+    "message": "TrickyBird is set up for this tab, but the page in front of you was not fetched by us. Loading it again goes through TrickyBird; stopping leaves the tab as it is."
+  },
+  "popupStaleAction": {
+    "message": "Load it again"
+  },
+  "popupFailedHeading": {
+    "message": "TrickyBird couldn’t open this page"
+  },
+  "popupFailedCode": {
+    "message": "Code $CODE$",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "TB-101"
+      }
+    }
+  },
+  "popupFailedAction": {
+    "message": "Try again"
+  },
+  "popupFailedSecondary": {
+    "message": "Copy details for support"
+  },
+  "popupFailedCopied": {
+    "message": "Copied. Paste it into your message to support."
+  },
+  "errNoSessionBody": {
+    "message": "Something went wrong while TrickyBird was setting this tab up."
+  },
+  "errNoSessionHelper": {
+    "message": "Try once more. If it happens again, copy the details below and send them to support."
+  },
+  "errUnreachableBody": {
+    "message": "None of TrickyBird’s own addresses answered from this network."
+  },
+  "errUnreachableHelper": {
+    "message": "If other sites still load, this network is probably blocking TrickyBird itself. Our status page will say whether the trouble is on our side."
+  },
+  "errNotRoutableBody": {
+    "message": "TrickyBird only opens ordinary web pages. This one belongs to the browser itself, or its address is inside your local network."
+  },
+  "errNotRoutableHelper": {
+    "message": "Open the site you want in this tab, then click the TrickyBird icon."
+  },
+  "errTabGoneBody": {
+    "message": "This tab went somewhere else before TrickyBird finished, so nothing was changed."
+  },
+  "errTabGoneHelper": {
+    "message": "Go back to the page you wanted, then try again."
+  },
+  "optionsTitle": {
+    "message": "Settings"
+  },
+  "optionsRoutedHeading": {
+    "message": "Tabs going through TrickyBird"
+  },
+  "optionsRoutedEmpty": {
+    "message": "No tab is going through TrickyBird right now."
+  },
+  "optionsRoutedEmptyHint": {
+    "message": "Open a page in a tab, then click the TrickyBird icon in your toolbar."
+  },
+  "optionsRoutedUnknown": {
+    "message": "Unknown site"
+  },
+  "optionsTakeOut": {
+    "message": "Stop"
+  },
+  "optionsAutoRecoverLabel": {
+    "message": "When a page fails to load, offer to open it with TrickyBird"
+  },
+  "optionsAutoRecoverHelp": {
+    "message": "A red mark appears on the TrickyBird icon in your toolbar. Click the icon and TrickyBird offers to fetch that page. Nothing opens unless you choose it."
+  },
+  "optionsAutoRecoverPermission": {
+    "message": "Chrome will ask to read your browsing history when you turn this on. It is the narrowest permission that can tell a page failed, and TrickyBird uses it only to notice the failure and to clear the offer once a page loads."
+  },
+  "optionsSave": {
+    "message": "Save"
+  },
+  "optionsSaved": {
+    "message": "Saved."
+  },
+  "optionsAccessDenied": {
+    "message": "TrickyBird didn’t get the permission it asked for, so your changes were not saved. Press Save again to see the request once more."
+  }
+}

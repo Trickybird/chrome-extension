@@ -1,0 +1,15 @@
+{
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "declarativeNetRequest",
+    "storage"
+  ],
+  "optional_permissions": [
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://trickybird.com/*"
+  ],
+  "optional_host_permissions": []
+}

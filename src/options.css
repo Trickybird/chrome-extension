@@ -1,0 +1,77 @@
+main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--s5) var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+.brand { gap: var(--s3); }
+/* The popup's strip carries this button too, at the same size and in the same corner. */
+.icon-button {
+  margin-left: auto;
+  display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0;
+  background: none; border: 1px solid transparent; border-radius: var(--radius-sm);
+  color: var(--ink-muted); cursor: pointer;
+  transition: background-color var(--press) var(--ease-out), color var(--press) var(--ease-out);
+}
+.icon-button svg { width: 17px; height: 17px; }
+.icon-button:hover { background: var(--surface-sunken); color: var(--ink-secondary); }
+.brand-chip { width: 36px; height: 36px; }
+.brand-chip .mark { width: 22px; height: 22px; }
+/* A document does get a title. */
+h1 { font-size: var(--text-xl); }
+h2 { margin-bottom: var(--s2); }
+
+form { display: flex; flex-direction: column; gap: var(--s4); }
+
+/* The card carries the boundary, so a populated list and its empty state share one shape. */
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0; }
+.rows li:first-child { padding-top: 0; }
+.rows li:last-child { padding-bottom: 0; }
+.rows li + li { border-top: 1px solid var(--line); padding-top: var(--s2); }
+.rows .grow { flex: 1; min-width: 0; }
+
+.facts { margin: 0; padding-left: var(--s4); color: var(--ink-secondary); }
+.facts li + li { margin-top: var(--s2); }
+
+.empty { display: flex; flex-direction: column; gap: var(--s2); }
+.empty .lead { color: var(--ink-secondary); }
+
+.check { display: flex; align-items: center; gap: var(--s2); font-weight: 600; }
+.check input { margin: 0; }
+.check + .helper { margin-top: var(--s2); }
+
+/* What this asks Chrome for, marked out so it is read before the checkbox is ever clicked. */
+.notice {
+  margin-top: var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+}
+
+input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.save { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+#save { width: auto; }
+#saved {
+  font-size: var(--text-sm); color: var(--ink-muted);
+  transition: opacity var(--state) var(--ease-in-out);
+}
+#saved.leaving { opacity: 0; }
+
+/* Pushed to the far end: it is a fact to quote when reporting something, not a link. */
+.version { margin-left: auto; font-size: var(--text-sm); color: var(--ink-muted); }
+
+footer {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 var(--s4) var(--s5);
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+}

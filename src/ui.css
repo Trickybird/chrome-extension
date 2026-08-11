@@ -1,0 +1,220 @@
+/* Shared tokens and primitives for both surfaces. Light is the default; dark overrides only the
+   values, so no component changes shape by theme. */
+
+:root {
+  /* Channels, not hex, exactly as the website stores them, so alpha is expressible and the two
+     surfaces cannot drift apart on a colour. Every value here is the website's own. */
+  --canvas-c: 250 250 249;
+  --surface-c: 255 255 255;
+  --ink-c: 12 12 13;
+  --ink-secondary-c: 64 64 71;
+  --ink-muted-c: 106 106 116;
+  --line-c: 17 17 19;
+  --accent-c: 91 75 242;
+  --accent-strong-c: 70 54 201;
+  --on-accent-c: 255 255 255;
+  --danger-c: 185 28 28;
+
+  /* Extension only. A popup has no page chrome to separate regions with, so it needs a recess the
+     website never had to invent. */
+  --surface-sunken-c: 242 241 239;
+
+  --canvas: rgb(var(--canvas-c));
+  --surface: rgb(var(--surface-c));
+  --surface-sunken: rgb(var(--surface-sunken-c));
+
+  --ink: rgb(var(--ink-c));
+  --ink-secondary: rgb(var(--ink-secondary-c));
+  --ink-muted: rgb(var(--ink-muted-c));
+
+  --line: rgb(var(--line-c) / 0.12);
+  --line-strong: rgb(var(--line-c) / 0.46);
+
+  /* The address field is read against the canvas rather than against a card, so it carries a value
+     of its own. The alpha differs by scheme for two different reasons: in light it is held near the
+     tone a browser gives its own address bar, and in dark the same tint would not buy the same
+     separation on a near-black ground. --line differs by scheme for the second reason alone. */
+  --field-fill: rgb(var(--line-c) / 0.07);
+
+  --accent: rgb(var(--accent-c));
+  --accent-strong: rgb(var(--accent-strong-c));
+  --on-accent: rgb(var(--on-accent-c));
+  --danger: rgb(var(--danger-c));
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  /* Four ranks, one ladder, both surfaces.
+       18 TITLE     the title of a surface
+       15 SUBJECT   what it is about, or a section heading
+       13 BODY      you read it, or you click it
+       12 FOOTNOTE  outside the reading path
+     Rank is a size decision and quiet is an ink decision; neither buys the other. Reaching for a
+     smaller size to make something quieter is what set the button's caption in the footer's voice. */
+  --text-xl: 18px;
+  --text-lg: 15px;
+  --text: 13px;
+  --text-sm: 12px;
+
+  /* A press starts fast and settles; a value already on screen moving to a new one starts slower. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --press: 120ms;
+  --state: 180ms;
+
+  /* The website's own fallback tier. Its Geist is served by the page framework and cannot
+     come with us, and Chrome's own popups use the system face. */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* The website is light only. This sits inside browser chrome that follows the system, so a
+   light-only popup would be the one bright rectangle on a dark screen. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas-c: 25 25 27;
+    --surface-c: 34 31 36;
+    --ink-c: 245 245 244;
+    --ink-secondary-c: 199 199 204;
+    --ink-muted-c: 154 154 162;
+    --line-c: 255 255 255;
+    --accent-c: 169 155 255;
+    --accent-strong-c: 192 182 255;
+    --on-accent-c: 23 21 31;
+    --danger-c: 255 157 148;
+
+    --surface-sunken-c: 43 40 46;
+    --line: rgb(var(--line-c) / 0.14);
+    --field-fill: rgb(var(--line-c) / 0.09);
+    --line-strong: rgb(var(--line-c) / 0.40);
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Any display rule below outranks the browser's own [hidden], and an element that stays visible
+   with no text reads as a broken control. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font: var(--text)/1.5 var(--font);
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+h1, h2 { margin: 0; font-weight: 600; }
+h1 { line-height: 1.25; letter-spacing: -0.01em; }
+h2 { font-size: var(--text-lg); line-height: 1.3; letter-spacing: -0.01em; }
+p { margin: 0; color: var(--ink-muted); }
+
+.host {
+  font-weight: 600;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The logo as the site draws it: a white bird in a round chip, never a recoloured glyph. The
+ * gradient is a fixed brand value rather than a token, because it is the same in both themes and
+ * the bird on it stays white in both.
+ */
+.brand { display: flex; align-items: center; gap: var(--s2); }
+.brand-chip {
+  flex: none;
+  display: grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background-image: linear-gradient(135deg, #7c5cff 0%, #4b36e6 100%);
+  color: #fff;
+}
+.brand-chip .mark { width: 17px; height: 17px; }
+.mark { flex: none; width: 18px; height: 18px; }
+.wordmark { font-size: var(--text); font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+
+/* A bounded region for things that belong together. Without it a settings page is a heading and a
+   gap, which reads as a draft rather than a product. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s4);
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color var(--press) var(--ease-out),
+              border-color var(--press) var(--ease-out),
+              color var(--press) var(--ease-out),
+              transform var(--press) var(--ease-out);
+}
+/* aria-disabled, not disabled: a disabled button drops focus, which strands the keyboard user
+   who just pressed it. It still refuses the click, in popup.js. */
+button[aria-disabled="true"] { cursor: default; opacity: 0.55; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:active:not([aria-disabled="true"]) { transform: scale(0.97); }
+
+.primary { background: var(--accent); color: var(--on-accent); width: 100%; }
+.primary:hover:not([aria-disabled="true"]) { background: var(--accent-strong); }
+/* Busy is not the same as unavailable, so a working button keeps its weight. One with nothing
+   to do does not, which is why this hangs off aria-busy rather than aria-disabled. */
+.primary[aria-busy="true"] { opacity: 1; }
+.primary { position: relative; overflow: hidden; }
+.primary[aria-busy="true"]::after {
+  content: ''; position: absolute; left: 0; bottom: 0; width: 40%; height: 2px;
+  background: rgb(var(--on-accent-c) / 0.55);
+  transform: translateX(75%);
+  animation: busy 1.6s linear infinite;
+}
+@keyframes busy { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+.ghost { background: transparent; color: var(--ink-secondary); border-color: var(--line-strong); }
+.ghost:hover:not([aria-disabled="true"]) { background: var(--surface-sunken); }
+/* Undoing the state the panel is celebrating: the one reversible action here worth a warning. */
+.ghost.danger { color: var(--danger); border-color: rgb(var(--danger-c) / 0.6); }
+.ghost.danger:hover:not([aria-disabled="true"]) {
+  border-color: rgb(var(--danger-c) / 0.85); background: rgb(var(--danger-c) / 0.08);
+}
+
+/* Footer link: quiet until you go for it, the way the website's own footer behaves. */
+.footer-link {
+  padding: 3px 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color var(--press) var(--ease-out);
+}
+.footer-link:hover { color: var(--accent); text-decoration: underline; }
+.footer-link:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm);
+}
+
+/* A sentence saying what a control will do is read, so it is body rank. Welding 12px to muted ink
+   here is what set the panel's only prose like a legal link. */
+.helper { color: var(--ink-secondary); font-size: var(--text); }
+/* One class each, so the override has to be compound to stay red. */
+.error, .helper.error { color: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* An allowlist rather than a blanket kill: colour still eases, movement and height do not, and a
+     transition added later opts out by default. */
+  *, *::before, *::after {
+    animation: none !important;
+    transition-property: color, background-color, border-color, outline-color,
+                         stroke, fill, stroke-opacity, fill-opacity, opacity !important;
+  }
+  /* With the transform gone a scale would snap rather than ease, so the press says so in colour. */
+  button:active:not([aria-disabled="true"]) { transform: none; filter: brightness(0.92); }
+  /* Held still, the travelling rule would read as a stalled progress bar. */
+  .primary[aria-busy="true"]::after { width: 100%; transform: none; }
+}

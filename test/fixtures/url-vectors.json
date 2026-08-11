@@ -1,0 +1,55 @@
+{
+  "_comment": "Address-format vectors. B64O is base64url-no-pad of the target origin only; path, query and fragment stay literal. The fragment never reaches the network, but it must survive the encode or a fragment-configured widget loses its configuration.",
+  "origins": [
+    {
+      "origin": "https://example.com",
+      "b64": "aHR0cHM6Ly9leGFtcGxlLmNvbQ"
+    },
+    {
+      "origin": "http://example.com:8080",
+      "b64": "aHR0cDovL2V4YW1wbGUuY29tOjgwODA"
+    },
+    {
+      "origin": "https://sub.cdn.net",
+      "b64": "aHR0cHM6Ly9zdWIuY2RuLm5ldA"
+    },
+    {
+      "origin": "http://a.test:8080",
+      "b64": "aHR0cDovL2EudGVzdDo4MDgw"
+    },
+    {
+      "origin": "ws://example.com",
+      "b64": "d3M6Ly9leGFtcGxlLmNvbQ"
+    },
+    {
+      "origin": "wss://example.com",
+      "b64": "d3NzOi8vZXhhbXBsZS5jb20"
+    },
+    {
+      "origin": "ws://chat.example.com:8080",
+      "b64": "d3M6Ly9jaGF0LmV4YW1wbGUuY29tOjgwODA"
+    }
+  ],
+  "paths": [
+    {
+      "url": "https://example.com/a/b?x=1&y=2",
+      "proxyPath": "/_o/aHR0cHM6Ly9leGFtcGxlLmNvbQ/a/b?x=1&y=2"
+    },
+    {
+      "url": "https://example.com/",
+      "proxyPath": "/_o/aHR0cHM6Ly9leGFtcGxlLmNvbQ/"
+    },
+    {
+      "url": "HTTPS://Example.COM:443/Path?q=1",
+      "proxyPath": "/_o/aHR0cHM6Ly9leGFtcGxlLmNvbQ/Path?q=1"
+    },
+    {
+      "url": "https://example.com/widget.html?v=2#frame=checkbox&id=1",
+      "proxyPath": "/_o/aHR0cHM6Ly9leGFtcGxlLmNvbQ/widget.html?v=2#frame=checkbox&id=1"
+    },
+    {
+      "url": "https://example.com/app#/settings",
+      "proxyPath": "/_o/aHR0cHM6Ly9leGFtcGxlLmNvbQ/app#/settings"
+    }
+  ]
+}
