@@ -2,18 +2,21 @@
 
 import { Message, send } from './messaging.js';
 import { readSettings, writeSettings } from './config.js';
-import { fillHomeButton, fillSiteLinks } from './site-links.js';
+import { fillSiteLinks } from './site-links.js';
 
 /** @param {string} key @param {...string} subs */
 const t = (key, ...subs) => chrome.i18n.getMessage(key, subs.length ? subs : undefined);
-/** @param {string} id @returns {any} */
-const el = (id) => document.getElementById(id);
+/** @param {string} id */
+const el = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
+/** A field, where the surface needs what was typed or ticked rather than what is drawn. */
+const field = (/** @type {string} */ id) => /** @type {HTMLInputElement} */ (document.getElementById(id));
 
 const STATIC_TEXT = {
   title: 'optionsTitle', routedHeading: 'optionsRoutedHeading', routedEmpty: 'optionsRoutedEmpty',
   routedEmptyHint: 'optionsRoutedEmptyHint',
   autoRecoverLabel: 'optionsAutoRecoverLabel', autoRecoverHelp: 'optionsAutoRecoverHelp',
   autoRecoverPermission: 'optionsAutoRecoverPermission',
+  endpointLabel: 'optionsEndpointLabel', endpointHelp: 'optionsEndpointHelp',
   save: 'optionsSave',
   // The same facts the popup shows once on first use. Shown once and never again is not a
   // disclosure, so they live here permanently as well.
@@ -72,37 +75,59 @@ async function renderRouted() {
 
 /** What is on disk, so the form can tell whether it still matches. */
 let stored = false;
+let storedEndpoint = '';
+
+/** The address as typed, trimmed, with the trailing slash a person naturally adds taken off. */
+const typedEndpoint = () =>
+  field('endpoint').value.trim().replace(/\/+$/, '');
 
 function syncSave() {
-  const dirty = el('autoRecover').checked !== stored;
+  const dirty = field('autoRecover').checked !== stored
+    || typedEndpoint() !== storedEndpoint;
   el('save').setAttribute('aria-disabled', String(!dirty));
 }
 
 async function renderSettings() {
-  stored = (await readSettings()).autoRecover;
-  el('autoRecover').checked = stored;
+  const settings = await readSettings();
+  stored = settings.autoRecover;
+  [storedEndpoint] = settings.endpoints;
+  field('autoRecover').checked = stored;
+  field('endpoint').value = storedEndpoint;
   syncSave();
 }
 
 el('autoRecover').addEventListener('change', syncSave);
+el('endpoint').addEventListener('input', syncSave);
 
 el('form').addEventListener('submit', async (/** @type {Event} */ event) => {
   event.preventDefault();
   if (el('save').getAttribute('aria-disabled') === 'true') return;
-  const autoRecover = el('autoRecover').checked;
-  const held = await chrome.permissions.getAll();
-
-  // The click on Save is the gesture that authorises this, so it happens here and nowhere else.
-  if (autoRecover && !held.permissions?.includes('webNavigation')
-      && !(await chrome.permissions.request({ permissions: ['webNavigation'] }))) {
-    await renderSettings();
-    say(t('optionsAccessDenied'), true);
+  const autoRecover = field('autoRecover').checked;
+  const endpoint = typedEndpoint();
+  // An address that is not https is refused here rather than stored and failed later: everything
+  // downstream assumes it, and a person who typed http deserves to be told, not ignored.
+  if (endpoint && !/^https:\/\/[^/\s]+$/.test(endpoint)) {
+    say(t('optionsEndpointInvalid'), true);
     return;
   }
+  // The click on Save is the gesture that authorises this, so it happens here and before any other
+  // await: a permission already held comes back true with no dialog, so there is nothing to look up
+  // first, and looking it up is what puts a round trip between the click and the ask.
+  if (autoRecover) {
+    if (!(await chrome.permissions.request({ permissions: ['webNavigation'] }))) {
+      await renderSettings();
+      say(t('optionsAccessDenied'), true);
+      return;
+    }
+  } else {
+    // Handed back rather than kept. Nothing reads it once the offer is off, and a browser still
+    // listing a permission against us for a switch nobody uses is a claim we would rather not make.
+    await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
+  }
 
-  await writeSettings({ autoRecover });
+  await writeSettings({ autoRecover, endpoints: endpoint ? [endpoint] : [] });
   stored = autoRecover;
-  syncSave();
+  await renderSettings();
   say(t('optionsSaved'));
 });
 
@@ -112,7 +137,6 @@ for (const [id, key] of Object.entries(STATIC_TEXT)) {
   if (node) node.textContent = t(key);
 }
 el('version').textContent = t('optionsVersion', chrome.runtime.getManifest().version);
-void fillHomeButton();
 void fillSiteLinks();
 void renderRouted();
 void renderSettings();

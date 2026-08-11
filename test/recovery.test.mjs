@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isOfferable } from '../src/recovery.js';
+import { clearedByLoad, isOfferable } from '../src/recovery.js';
 
 const failure = (over = {}) => ({
   error: 'net::ERR_NAME_NOT_RESOLVED', frameId: 0, url: 'https://example.com/', ...over,
@@ -37,4 +37,19 @@ test('a page we could not route anyway is not offered', () => {
   assert.equal(isOfferable(failure({ url: 'chrome://extensions' })), false);
   assert.equal(isOfferable(failure({ url: 'file:///tmp/x.html' })), false);
   assert.equal(isOfferable(failure({ url: undefined })), false);
+});
+
+// The reload is what someone reaches for while stuck, and it used to be the thing that removed the
+// only record of what they had asked for.
+test('our own failure survives a reload of the console it is parked on', () => {
+  assert.equal(clearedByLoad({ reason: 'error' }, true), false);
+});
+
+test('our own failure is stale once the tab is somewhere else', () => {
+  assert.equal(clearedByLoad({ reason: 'error' }, false), true);
+});
+
+test('an offer a failed navigation raised is answered by a page that loads', () => {
+  assert.equal(clearedByLoad({ reason: 'failed' }, false), true);
+  assert.equal(clearedByLoad(null, true), true);
 });

@@ -9,8 +9,11 @@ const spec = (over = {}) => ({
   tabId: 7, origin: 'https://example.com', endpoint: 'https://proxy.example', baseId: 1, ...over,
 });
 
-test('every rule is scoped to one tab', () => {
+// Everything a tab asks for is scoped to that tab. The one exception is deliberate and covered by
+// its own test below: a service worker's request belongs to no tab, so it is scoped by who asked.
+test('every rule a tab can be attributed to is scoped to that tab', () => {
   for (const rule of buildTabRules(spec({ tabId: 42 }))) {
+    if (rule.condition.initiatorDomains) continue;
     assert.deepEqual(rule.condition.tabIds, [42], `rule ${rule.id}`);
   }
 });
@@ -119,4 +122,33 @@ test('each local pattern stays well short of the compile budget', () => {
     const pattern = String(rule.condition.regexFilter);
     assert.ok(pattern.length < 120, `pattern too large: ${pattern.length}`);
   }
+});
+
+// A service worker's request is attributed to no tab, so every tabIds-scoped rule misses it. Without
+// the rule below, a proxied page reaches the real site by registering one: measured in a real
+// Chromium, the page's fetch was blocked and its worker's went through to the server.
+test('the fence also catches what the proxy origin asks for outside any tab', () => {
+  const rules = buildTabRules({
+    tabId: 7, origin: 'https://example.com', endpoint: 'https://gw-1.example', baseId: 1,
+  });
+  const tabless = rules.filter((r) => r.condition.tabIds === undefined);
+  assert.equal(tabless.length, 1, 'exactly one rule may be unscoped by tab');
+
+  const [rule] = tabless;
+  assert.equal(rule.action.type, 'block');
+  assert.deepEqual(rule.condition.initiatorDomains, ['gw-1.example'],
+    'it has to be scoped by who asked, or it would block the whole browser');
+  assert.deepEqual(rule.condition.excludedRequestDomains, ['gw-1.example'],
+    'the proxied page still has to reach the proxy');
+  assert.equal(rule.condition.resourceTypes?.length, 15);
+});
+
+// The base id is derived from the catch-all's id when the rules are read back, so appending must not
+// move it, and removing a fence must still take every rule it added.
+test('the extra rule does not disturb reading a fence back', () => {
+  const rules = buildTabRules({
+    tabId: 7, origin: 'https://example.com', endpoint: 'https://gw-1.example', baseId: 40,
+  });
+  assert.deepEqual(readTabRule(rules, 7), { baseId: 40, endpointHost: 'gw-1.example' });
+  assert.deepEqual(ruleIdsForBase(40), rules.map((r) => r.id));
 });

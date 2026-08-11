@@ -44,6 +44,7 @@ form { display: flex; flex-direction: column; gap: var(--s4); }
 .check { display: flex; align-items: center; gap: var(--s2); font-weight: 600; }
 .check input { margin: 0; }
 .check + .helper { margin-top: var(--s2); }
+.field + .helper { margin-top: var(--s2); }
 
 /* What this asks Chrome for, marked out so it is read before the checkbox is ever clicked. */
 .notice {
@@ -75,3 +76,18 @@ footer {
   align-items: center;
   gap: var(--s4);
 }
+
+/* One labelled input. Its own block rather than the checkbox row, because the label sits above the
+   control and the control has to be able to take a long address without shrinking the page. */
+.field { display: flex; flex-direction: column; gap: var(--s2); }
+.field > span { font-size: var(--text-sm); color: var(--ink-secondary); }
+.field input {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--field-fill);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--s2) var(--s3);
+}
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

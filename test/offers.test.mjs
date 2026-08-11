@@ -78,3 +78,15 @@ test('our own failure carries its code, a page that would not load does not', as
   await put(8, 'https://example.com/', 'failed');
   assert.deepEqual(await get(8), { url: 'https://example.com/', reason: 'failed' });
 });
+
+// Two tabs losing their connection in the same moment each raise an offer. Read-modify-write
+// against storage is not atomic, so without a queue the second write is built on a set the first
+// had not saved yet and one of them is simply gone.
+test('two offers raised at once both survive', async () => {
+  await Promise.all([
+    put(1, 'https://a.example/', 'failed'),
+    put(2, 'https://b.example/', 'failed'),
+  ]);
+  assert.equal((await get(1))?.url, 'https://a.example/');
+  assert.equal((await get(2))?.url, 'https://b.example/');
+});

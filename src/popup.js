@@ -2,9 +2,11 @@
 
 import { Message, send } from './messaging.js';
 import { classify } from './target.js';
+import { choose } from './panel.js';
 import { fromProxyUrl } from './proxy-url.js';
-import { fillHomeButton, fillSiteLinks } from './site-links.js';
+import { fillSiteLinks } from './site-links.js';
 import { readSettings, siteLink } from './config.js';
+import { frontEndpoints, isOurOwnConsole } from './fronts.js';
 import { ErrorCode, MESSAGE_KEY } from './errors.js';
 
 /** @param {string} key @param {...string} subs */
@@ -30,7 +32,6 @@ const el = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 
 const view = {
   heading: el('heading'), address: el('artAddress'), status: el('status'),
-  home: /** @type {HTMLAnchorElement} */ (el('home')),
   body: el('body'),
   trade: el('trade'), tradeHeading: el('tradeHeading'), tradeServers: el('tradeServers'),
   tradeAddress: el('tradeAddress'), tradeCookies: el('tradeCookies'),
@@ -45,8 +46,6 @@ const FIRST_RUN_SEEN = 'firstRunSeen';
 let firstRunShown = false;
 const ADDRESS_CHARS = 32;
 // Six seconds for a page that is slow, checked often enough that the payoff is not held back.
-const SETTLE_TRIES = 60;
-const SETTLE_STEP = 100;
 
 /** @type {Record<string, { heading: string, body: string }>} */
 const OFFER_TEXT = {
@@ -100,9 +99,6 @@ function render({ heading = '', address = '', state = null, body = '',
 document.documentElement.lang = chrome.i18n.getUILanguage();
 
 async function main() {
-  // An icon button, so the label is the accessible name rather than its contents: writing text
-  // into it would replace the glyph.
-  void fillHomeButton();
   view.manage.setAttribute('aria-label', t('popupFooterManage'));
   view.manage.title = t('popupFooterManage');
   view.manage.onclick = () => chrome.runtime.openOptionsPage();
@@ -117,15 +113,79 @@ async function main() {
   if (!tab?.id) return renderLauncher();
 
   const state = await send(Message.tabState, { tabId: tab.id, url: tab.url });
-  if (state?.routed) return renderRouted(tab, state);
+  // Fenced or not, a page that came through us gets the panel that can take the tab back out, and
+  // it is the one state that leaves an unread offer alone.
+  if (state?.routed || state?.proxied) return renderRouted(tab, state);
 
   // Taking it here is what marks it seen; the badge means nobody has looked yet.
   const offer = /** @type {Offer|null} */ (await send(Message.takeOffer, { tabId: tab.id }));
-  const target = classify(offer?.url ?? tab.url);
-  if (!target.ok) return renderLauncher();
-  // Our own failure keeps its code and its screen; only a page the browser could not load is an offer.
-  if (offer?.reason === 'error') return fail(offer.code ?? ErrorCode.NO_SESSION, tab, target);
-  return offer ? renderOffer(tab, target, offer) : renderIdle(tab, target);
+  const choice = choose({
+    url: tab.url,
+    onOwnConsole: isOurOwnConsole(tab.url, await frontEndpoints()),
+    waitingFrom: state?.waitingFrom,
+    offer,
+  });
+  switch (choice.panel) {
+    // Our own failure keeps its code and its screen; only a page the browser could not load is an
+    // offer. The address travels with it, because the tab is rarely still on it by now.
+    case 'failed': return fail(choice.code ?? ErrorCode.NO_SESSION, tab, choice.target, choice.url);
+    case 'handoff': return renderHandoff(tab, choice.from);
+    case 'onSite': return renderOnSite();
+    case 'expired': return renderExpired();
+    case 'offer': return renderOffer(tab, choice.target, choice.url, choice.reason);
+    case 'idle': return renderIdle(tab, choice.target);
+    default: return renderLauncher();
+  }
+}
+
+/**
+ * The launch is half done and the rest of it happens on the page behind this panel. The press is
+ * the person's, so this waits rather than works; and because it waits on them, it has to offer the
+ * other answer too. Without a way out this reads as a spinner that never finishes.
+ *
+ * @param {chrome.tabs.Tab} tab @param {string} from
+ */
+function renderHandoff(tab, from) {
+  render({
+    heading: t('popupHandoffHeading'),
+    // Deliberately not the connecting state: nothing is in flight. Something that keeps moving says
+    // "working, wait", and the whole message here is the opposite, that the next move is theirs.
+    helper: t('popupHandoffHelper'),
+    secondary: {
+      label: t('popupHandoffCancel'),
+      onClick: async () => {
+        await send(Message.cancelLaunch, { tabId: tab.id });
+        window.close();
+      },
+    },
+    address: (() => {
+      try {
+        return new URL(from).host;
+      } catch {
+        return '';
+      }
+    })(),
+  });
+}
+
+/** On our own site with nothing in flight. Nothing is happening, so nothing should look like it is. */
+function renderOnSite() {
+  render({
+    heading: t('popupOnSiteHeading'),
+    helper: t('popupOnSiteHelper'),
+  });
+}
+
+/**
+ * The tab was sent here by a launch, and the record behind it is gone: it ran out of time, or the
+ * browser dropped what the extension was holding in memory. The address went with it, so this says
+ * the launch is over and points at the way in that is already on the screen.
+ */
+function renderExpired() {
+  render({
+    heading: t('popupExpiredHeading'),
+    helper: t('popupExpiredHelper'),
+  });
 }
 
 /**
@@ -162,22 +222,25 @@ async function renderIdle(tab, target) {
   });
 }
 
-/** @param {chrome.tabs.Tab} tab @param {Routable} target @param {Offer} offer */
-function renderOffer(tab, target, offer) {
-  const text = OFFER_TEXT[offer.reason] ?? OFFER_TEXT.link;
+/**
+ * @param {chrome.tabs.Tab} tab @param {Routable} target @param {string} url
+ * @param {Offer['reason']} reason
+ */
+function renderOffer(tab, target, url, reason) {
+  const text = OFFER_TEXT[reason] ?? OFFER_TEXT.link;
   render({
     heading: t(text.heading),
     address: target.host,
     state: 'direct',
     body: t(text.body, target.host),
     trade: true,
-    primary: { label: t('popupOfferAction'), onClick: () => start(tab, target, offer.url) },
+    primary: { label: t('popupOfferAction'), onClick: () => start(tab, target, url) },
     secondary: { label: t('popupOfferSecondary'), onClick: () => window.close() },
     helper: t('popupIdleHelper'),
   });
 }
 
-/** @param {chrome.tabs.Tab} tab @param {{ origin: string, proven: boolean|null }} state */
+/** @param {chrome.tabs.Tab} tab @param {{ origin: string, proven?: boolean|null }} state */
 function renderRouted(tab, state) {
   // Only a tab we can positively see somewhere else is stale. Not being able to read the address
   // proves nothing, and the fence is installed either way.
@@ -228,37 +291,27 @@ async function start(tab, target, url) {
   });
   if (explanationWasRead) await chrome.storage.local.set({ [FIRST_RUN_SEEN]: true });
 
-  const result = await send(Message.route, { tabId: tab.id, url: url ?? tab.url });
+  const result = await send(Message.launch, { tabId: tab.id, url: url ?? tab.url });
   if (!result?.ok) return fail(result?.code ?? ErrorCode.NO_SESSION, tab, target);
-  return settle(tab, target);
+  // The tab is on its way to the site, and the rest of this launch happens there. Waiting for a
+  // routed tab here would wait on a press this panel cannot see and usually does not outlive.
+  return render({
+    heading: t('popupHandoffHeading'), address: target.host, state: 'connecting',
+    helper: t('popupHandoffHelper'),
+  });
 }
 
 /**
- * Holds the connecting panel until the proxied page has finished loading, then reports what the tab
- * is doing. `status` needs no permission, which is what makes waiting for it honest here.
- * @param {chrome.tabs.Tab} tab @param {Routable} target
+ * @param {string} code @param {chrome.tabs.Tab} tab @param {Routable} target
+ * @param {string} [url] The address to try again, when the tab is somewhere else by now.
  */
-async function settle(tab, target) {
-  let fresh = null;
-  for (let attempt = 0; attempt < SETTLE_TRIES; attempt += 1) {
-    fresh = await chrome.tabs.get(/** @type {number} */ (tab.id)).catch(() => null);
-    if (!fresh || fresh.status === 'complete') break;
-    await new Promise((resolve) => setTimeout(resolve, SETTLE_STEP));
-  }
-  if (!fresh) return;
-  const state = await send(Message.tabState, { tabId: tab.id, url: fresh.url });
-  if (state?.routed) return renderRouted(fresh, state);
-  return fail(ErrorCode.NO_SESSION, tab, target);
-}
-
-/** @param {string} code @param {chrome.tabs.Tab} tab @param {Routable} target */
-function fail(code, tab, target) {
+function fail(code, tab, target, url) {
   const keys = MESSAGE_KEY[code];
   render({
     heading: t('popupFailedHeading'), address: target.host, state: 'failed',
     body: t(keys?.body ?? 'errNoSessionBody'),
     failure: t('popupFailedCode', code),
-    primary: { label: t('popupFailedAction'), onClick: () => start(tab, target) },
+    primary: { label: t('popupFailedAction'), onClick: () => start(tab, target, url) },
     secondary: {
       label: t('popupFailedSecondary'),
       onClick: async () => {

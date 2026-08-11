@@ -1,6 +1,6 @@
 {
   "name": "trickybird-extension",
-  "version": "1.0.3",
+  "version": "1.2.0",
   "private": true,
   "description": "Chrome extension that routes one browser tab through the TrickyBird web proxy.",
   "type": "module",
@@ -15,8 +15,8 @@
     "check": "npm run types && npm test && npm run permissions"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.31",
+    "@types/chrome": "^0.2.5",
     "@types/node": "^26.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }

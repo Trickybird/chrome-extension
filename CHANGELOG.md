@@ -3,6 +3,40 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0]
+
+### Fixed
+
+- A launch that fails no longer ends on a panel with nothing on it. Whatever went wrong, the popup
+  names it, keeps the address that was asked for, and offers to open it again.
+- That address now survives the reload someone reaches for while stuck, as long as the tab is still
+  standing on the page the launch stopped on.
+- A launch nobody finished used to expire in silence and take the address with it. It comes back as
+  an offer to try again, under its own code `TB-106`.
+- A tab still carrying a launch the extension no longer holds says so, rather than describing the
+  site already on the screen.
+
+### Security
+
+- The published archive names one console, the one this extension ships with. The manifest in the
+  repository also names a local `.test` console so the extension can be run against a stack on your
+  own machine; packaging strips that entry and refuses to build an archive still carrying it.
+- A proxied page owns its own address bar, so what it puts there is parsed before anything reads it
+  back as an address. A path that decodes to something that is not a web address no longer reaches
+  the panel that draws it.
+- Turning the failed-page offer off hands `webNavigation` back to the browser instead of holding a
+  permission nothing is using.
+
+### Changed
+
+- Records in session storage are written one at a time. Two tabs raising an offer in the same
+  moment used to keep only whichever one finished last.
+- Settings asks for the permission on the click itself, with no lookup in between.
+
+### Removed
+
+- The builder for proxy addresses. The console builds those, and nothing here had called it since.
+
 ## [1.0.3]
 
 ### Added
