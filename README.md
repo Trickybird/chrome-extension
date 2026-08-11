@@ -1,9 +1,13 @@
-<img src="icons/icon-128.png" alt="" width="72" align="right">
+<p align="center">
+  <img src="icons/icon-128.png" alt="" width="88" height="88">
+</p>
 
-# TrickyBird Web Proxy for Chrome
+<h1 align="center">TrickyBird Web Proxy Chrome Extension</h1>
 
-Chrome extension that routes **one tab** through the TrickyBird web proxy. Every other tab goes out
-the ordinary way.
+<p align="center">
+  Routes <b>one tab</b> through the TrickyBird web proxy.<br>
+  Every other tab goes out the ordinary way.
+</p>
 
 Not a VPN. No country list, no server picker, no master switch.
 
