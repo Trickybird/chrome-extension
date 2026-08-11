@@ -1,0 +1,52 @@
+# Cutting a release from a tag rather than by hand, because a release published by a person names
+# that person on the releases page forever. The built-in token publishes as the actions bot.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      # Only this job, and only to create the release.
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+      # A tag that disagrees with the manifest publishes an archive under a version it does not
+      # carry, and the store is the place that would find out.
+      - name: the tag names the version the manifest carries
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(node -p "require('./manifest.json').version")
+          test "$tag" = "$manifest" \
+            || { echo "tag says $tag, manifest says $manifest"; exit 1; }
+
+      - run: npm run package
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip=$(ls build/*.zip)
+          sha=$(sha256sum "$zip" | cut -d' ' -f1)
+          # The section this version already has in the changelog, and nothing written twice.
+          awk -v v="${GITHUB_REF_NAME#v}" '
+            $0 == "## [" v "]" { f = 1; next }
+            /^## \[/ { f = 0 }
+            f' CHANGELOG.md > notes.md
+          printf '\nArchive `%s`, sha256 `%s`. Two builds of this commit produce the same bytes.\n' \
+            "$(basename "$zip")" "$sha" >> notes.md
+          gh release create "$GITHUB_REF_NAME" "$zip" \
+            --title "$GITHUB_REF_NAME" --notes-file notes.md
