@@ -9,6 +9,17 @@
   Every other tab goes out the ordinary way.
 </p>
 
+<p align="center">
+  <a href="https://github.com/Trickybird/chrome-extension/actions/workflows/ci.yml"><img
+    src="https://github.com/Trickybird/chrome-extension/actions/workflows/ci.yml/badge.svg"
+    alt="CI"></a>
+  <a href="https://github.com/Trickybird/chrome-extension/releases/latest"><img
+    src="https://img.shields.io/github/v/release/Trickybird/chrome-extension" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/manifest-v3-blue" alt="Manifest V3">
+  <a href="LICENSE"><img
+    src="https://img.shields.io/github/license/Trickybird/chrome-extension" alt="MIT licence"></a>
+</p>
+
 Not a VPN. No country list, no server picker, no master switch.
 
 ## What routing a tab does
@@ -25,8 +36,8 @@ None of it applies to any other tab.
 The toolbar icon or the right-click menu, then **Open with TrickyBird**. On a browser page or a
 blank tab there is nothing to route, and the popup says so.
 
-Not on the Chrome Web Store yet. To run it from source: `chrome://extensions`, Developer mode, Load
-unpacked, this directory. It asks `https://trickybird.com` for a session.
+The Chrome Web Store listing is in preparation. To run it from source: `chrome://extensions`,
+Developer mode, Load unpacked, this directory. It asks `https://trickybird.com` for a session.
 
 ## Permissions
 
