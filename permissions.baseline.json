@@ -8,8 +8,10 @@
   "optional_permissions": [
     "webNavigation"
   ],
-  "host_permissions": [
+  "host_permissions": [],
+  "optional_host_permissions": [],
+  "externally_connectable": [
+    "https://tb-front.test/*",
     "https://trickybird.com/*"
-  ],
-  "optional_host_permissions": []
+  ]
 }

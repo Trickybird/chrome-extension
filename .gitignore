@@ -2,3 +2,10 @@ node_modules/
 build/
 *.zip
 .DS_Store
+
+# The key that signs the address catalog. `tools/sign-catalog.mjs --keygen` writes one, and it is
+# the one file in this project that must never become public: whoever holds it can sign a list that
+# every installed copy will accept.
+catalog-key.json
+*-key.json
+*.pem

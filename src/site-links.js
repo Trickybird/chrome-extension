@@ -12,27 +12,30 @@ const PAGES = [
   { id: 'statusLink', path: '/status', key: 'footerStatus' },
 ];
 
-/**
- * The button that goes to the site itself. Its path is the root, so it is not one of the PAGES,
- * whose entries are all named pages.
- */
-export async function fillHomeButton() {
-  const node = /** @type {HTMLAnchorElement|null} */ (document.getElementById('home'));
-  if (!node) return;
-  const { endpoints } = await readSettings();
-  node.href = siteLink(endpoints, '/');
-  // The same action the launcher screen offers, so it carries the same label.
-  const label = chrome.i18n.getMessage('popupLaunchAction');
-  node.title = label;
-  node.setAttribute('aria-label', label);
-}
+/** @param {string} id */
+const el = (id) => /** @type {HTMLAnchorElement|null} */ (document.getElementById(id));
 
+/**
+ * Every link on the surface, from one read of the settings. Both surfaces want all of them, and
+ * asking storage once per link is a round trip each time the popup opens.
+ */
 export async function fillSiteLinks() {
   const { endpoints } = await readSettings();
+
   for (const { id, path, key } of PAGES) {
-    const node = /** @type {HTMLAnchorElement|null} */ (document.getElementById(id));
+    const node = el(id);
     if (!node) continue;
     node.textContent = chrome.i18n.getMessage(key);
     node.href = siteLink(endpoints, path);
   }
+
+  // The way to the site itself, and an icon button rather than a named page: its label is the
+  // accessible name, because writing text into it would replace the glyph.
+  const home = el('home');
+  if (!home) return;
+  home.href = siteLink(endpoints, '/');
+  // The same action the launcher screen offers, so it carries the same label.
+  const label = chrome.i18n.getMessage('popupLaunchAction');
+  home.title = label;
+  home.setAttribute('aria-label', label);
 }

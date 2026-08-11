@@ -37,24 +37,33 @@ The toolbar icon or the right-click menu, then **Open with TrickyBird**. On a br
 blank tab there is nothing to route, and the popup says so.
 
 The Chrome Web Store listing is in preparation. To run it from source: `chrome://extensions`,
-Developer mode, Load unpacked, this directory. It asks `https://trickybird.com` for a session.
+Developer mode, Load unpacked, this directory.
 
 ## Permissions
 
 ```json
 "permissions": ["declarativeNetRequest", "storage", "activeTab", "contextMenus"],
-"host_permissions": ["https://trickybird.com/*"],
-"optional_permissions": ["webNavigation"]
+"optional_permissions": ["webNavigation"],
+"externally_connectable": { "matches": ["https://trickybird.com/*"] }
 ```
 
 **You are never asked for access to a site you route.** Not at install, not on the first site, not
-on the hundredth.
+on the hundredth. There is no host in the manifest at all, because nothing here makes a request:
+the site opens the session, and moving a tab needs access to nothing.
 
 That comes from how the [declarativeNetRequest][dnr] rules are built, not from cutting a corner. A
 test asserts the rule table never grows an action that would need more.
 
-Chrome shows one warning for this set, "Block content on any page". The single host in the manifest
-is where sessions come from, and it appears by name with its own switch.
+Chrome shows one warning for this set, "Block content on any page".
+
+`externally_connectable` is not a permission and raises no warning. It grants the extension nothing;
+it names the pages allowed to speak to it. The pattern is one exact host, never a subdomain
+wildcard, and a test holds it there.
+
+The manifest in this repository names a second one: a console on a `.test` name, so the extension
+can be loaded straight from here and pointed at a stack running on your own machine. `.test` never
+resolves on the public internet, and `npm run package` strips the entry and refuses to build an
+archive that still carries it.
 
 One thing can still ask, and it is off by default: the offer to help when a page fails needs
 `webNavigation` to see which page failed. Settings asks at the moment you switch it on.
@@ -63,10 +72,24 @@ One thing can still ask, and it is off by default: the offer to help when a page
 
 ## Routing
 
-A session is minted, the tab is navigated to it, and session rules fence that tab in, scoped to its
-tab id. Nothing leaves the tab except through the proxy, and a device on your own network is left
-alone. The rules die with the browser session, closing the tab removes them, and they are the record
-of which tabs are fenced.
+The extension parks the address, sends the tab to our site, and waits. The site opens the session
+the same way it does for anyone typing an address there, then hands the result back. Only then does
+the extension fence the tab, read its own rules back, and move it.
+
+The fence is session rules scoped to one tab id, plus one more scoped to the proxy's own origin: a
+service worker's request belongs to no tab, so a tab-scoped rule cannot see it. Nothing leaves that
+tab except through the proxy, and a device on your own network is left alone. The rules die with the browser session, closing the
+tab removes them, and they are the record of which tabs are fenced.
+
+The address you opened never reaches a request line. It is either parked in memory, with the tab
+carrying a one-time code in the fragment, or carried in the fragment itself, which browsers do not
+send to a server.
+
+The extension makes two kinds of request and neither needs access to any site. It asks a public DNS
+resolver over HTTPS for the list of addresses this proxy answers on, so that an address blocked
+tomorrow can be replaced without a new release; the answer is signed, and one that is not is
+discarded. And it asks those addresses whether they respond, one at a time, so a launch starts at one
+that works. Neither request carries the site you are opening.
 
 [dnr]: https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
 
@@ -90,13 +113,18 @@ src/
   proxy-url.js    the proxy's address format (pure)
   endpoints.js    which session address to try, and in what order (pure)
   recovery.js     which navigation failures may be offered a retry (pure)
-  session.js      opens a session, walking the addresses until one answers
+  bootstrap-url.js what the site is allowed to hand back (pure)
+  catalog.js      the signed address list: reading it, checking it (pure + one signature check)
+  doh.js          asking a public resolver for that list
+  fronts.js       which addresses exist, which one answers, which one to open
+  pending.js      launches waiting on the site, one per nonce
+  handoff.js      the site's channel: the checks, the watchdog, the address walk
   offers.js       one pending suggestion per tab
   badge.js        the toolbar badge, with a single owner
   site-links.js   the links both surfaces carry
   config.js       settings
   errors.js       error codes
-  messaging.js    the surface-to-background contract
+  messaging.js    the surface-to-background contract, and the site's
   popup.*         toolbar popup
   options.*       settings
 ```
@@ -105,8 +133,12 @@ The popup learns which site you are on from `activeTab`, granted when you invoke
 Nothing reads a tab's address at any other time.
 
 `npm test` runs against the pure modules and the manifest: no browser, no network.
-`tools/platform-probe.mjs` loads the extension into a real Chromium and prints the platform limits
-the code assumes; it needs Playwright, which the tests do not.
+
+Two optional tools need Playwright, which the tests do not. `tools/platform-probe.mjs` loads the
+extension into a real Chromium and prints the platform limits the code assumes.
+`tools/live-handoff.mjs` drives a whole launch through that browser, serving the three hosts
+locally: the channel, the fragment, the rule table and the navigation are all things a unit test
+cannot see.
 
 ## Contributing
 

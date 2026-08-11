@@ -9,6 +9,7 @@ export const ErrorCode = {
   ENDPOINT_UNREACHABLE: 'TB-103',
   NOT_ROUTABLE: 'TB-104',
   TAB_GONE: 'TB-105',
+  LAUNCH_EXPIRED: 'TB-106',
 };
 
 /** Beside the codes, so a new cause cannot skip its copy. */
@@ -17,6 +18,7 @@ export const MESSAGE_KEY = {
   [ErrorCode.ENDPOINT_UNREACHABLE]: { body: 'errUnreachableBody', helper: 'errUnreachableHelper' },
   [ErrorCode.NOT_ROUTABLE]: { body: 'errNotRoutableBody', helper: 'errNotRoutableHelper' },
   [ErrorCode.TAB_GONE]: { body: 'errTabGoneBody', helper: 'errTabGoneHelper' },
+  [ErrorCode.LAUNCH_EXPIRED]: { body: 'errExpiredBody', helper: 'errExpiredHelper' },
 };
 
 export class RoutingError extends Error {

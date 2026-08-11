@@ -1,28 +1,30 @@
 /**
  * The proxy's address format: the target origin is base64url-encoded into the path, and the path,
- * query and fragment that follow stay literal. test/fixtures/url-vectors.json holds the vectors
- * the server side is built against.
+ * query and fragment that follow stay literal. test/fixtures/url-vectors.json holds the vectors the
+ * server side is built against.
  */
 
 const PREFIX = '/_o/';
 
-/** base64url, no padding. @param {string} origin */
-export function encodeOrigin(origin) {
-  return btoa(origin).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
-}
+/** What the format carries. The vectors hold sockets as well as pages, and nothing else is a target. */
+const SCHEMES = new Set(['https:', 'http:', 'wss:', 'ws:']);
 
 /** @param {string} encoded */
-export function decodeOrigin(encoded) {
+function decodeOrigin(encoded) {
   const padded = encoded.replaceAll('-', '+').replaceAll('_', '/');
   return atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
 }
 
-/** What a redirect rule substitutes into. @param {string} endpoint @param {string} origin */
-export function proxyPrefix(endpoint, origin) {
-  return `${endpoint.replace(/\/+$/, '')}${PREFIX}${encodeOrigin(origin)}/`;
-}
-
-/** Reads a proxied URL back, or null. @param {string} url */
+/**
+ * Reads a proxied address back, or null.
+ *
+ * What comes in is hostile: the address bar of a proxied tab belongs to the page, which can push
+ * any path it likes under `/_o/`. Everything downstream draws this or hands it to `new URL`, so it
+ * is parsed once here, and a segment that decodes to something that is not a web address is not
+ * proxied as far as this function is concerned.
+ *
+ * @param {string} url
+ */
 export function fromProxyUrl(url) {
   let u;
   try {
@@ -32,9 +34,14 @@ export function fromProxyUrl(url) {
   }
   if (!u.pathname.startsWith(PREFIX)) return null;
   const [encoded, ...rest] = u.pathname.slice(PREFIX.length).split('/');
+
+  let target;
   try {
-    return { endpoint: u.origin, origin: decodeOrigin(encoded), path: `/${rest.join('/')}` };
+    target = new URL(decodeOrigin(encoded));
   } catch {
     return null;
   }
+  if (!SCHEMES.has(target.protocol)) return null;
+
+  return { endpoint: u.origin, origin: target.origin, path: `/${rest.join('/')}` };
 }

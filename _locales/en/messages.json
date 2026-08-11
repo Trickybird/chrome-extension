@@ -78,19 +78,19 @@
     "message": "Open with TrickyBird"
   },
   "popupIdleHelper": {
-    "message": "This tab reloads and our servers fetch the page. Nothing else changes, and one click here puts it back."
+    "message": "This tab goes to our site, then one more press opens the page. Stopping later is one click."
   },
   "popupOfferLinkHeading": {
     "message": "Open this link with TrickyBird"
   },
   "popupOfferLinkBody": {
-    "message": "TrickyBird fetches it through our servers and opens it right here, in this tab."
+    "message": "TrickyBird fetches it through our servers and opens it in this tab."
   },
   "popupOfferFailedHeading": {
     "message": "This page didn’t open"
   },
   "popupOfferFailedBody": {
-    "message": "Your browser couldn’t reach $SITE$. TrickyBird can try fetching it through our servers and opening it right here instead.",
+    "message": "Your browser couldn’t reach $SITE$. TrickyBird can try fetching it through our servers and opening it in this tab instead.",
     "placeholders": {
       "site": {
         "content": "$1",
@@ -153,10 +153,10 @@
     "message": "Try once more. If it happens again, copy the details below and send them to support."
   },
   "errUnreachableBody": {
-    "message": "None of TrickyBird’s own addresses answered from this network."
+    "message": "TrickyBird’s site did not answer the extension, so nothing was opened."
   },
   "errUnreachableHelper": {
-    "message": "If other sites still load, this network is probably blocking TrickyBird itself. Our status page will say whether the trouble is on our side."
+    "message": "Trying again is safe. If it keeps happening, this network may be blocking TrickyBird, and our status page says whether the trouble is on our side."
   },
   "errNotRoutableBody": {
     "message": "TrickyBird only opens ordinary web pages. This one belongs to the browser itself, or its address is inside your local network."
@@ -169,6 +169,12 @@
   },
   "errTabGoneHelper": {
     "message": "Go back to the page you wanted, then try again."
+  },
+  "errExpiredBody": {
+    "message": "This launch waited a long time for a press, so TrickyBird let it go."
+  },
+  "errExpiredHelper": {
+    "message": "Try again to open the same address."
   },
   "optionsTitle": {
     "message": "Settings"
@@ -197,6 +203,15 @@
   "optionsAutoRecoverPermission": {
     "message": "Chrome will ask to read your browsing history when you turn this on. It is the narrowest permission that can tell a page failed, and TrickyBird uses it only to notice the failure and to clear the offer once a page loads."
   },
+  "optionsEndpointLabel": {
+    "message": "Address to try first"
+  },
+  "optionsEndpointHelp": {
+    "message": "TrickyBird starts here, and moves to another of its own addresses if this one stops answering. Change it only if someone gave you a different address."
+  },
+  "optionsEndpointInvalid": {
+    "message": "That needs to be an https address with nothing after the host."
+  },
   "optionsSave": {
     "message": "Save"
   },
@@ -205,5 +220,26 @@
   },
   "optionsAccessDenied": {
     "message": "TrickyBird didn’t get the permission it asked for, so your changes were not saved. Press Save again to see the request once more."
+  },
+  "popupHandoffHeading": {
+    "message": "Ready to open"
+  },
+  "popupHandoffHelper": {
+    "message": "The address is already in the field on that page. Press Open there to continue, or cancel and nothing is sent."
+  },
+  "popupHandoffCancel": {
+    "message": "Cancel and go back"
+  },
+  "popupOnSiteHeading": {
+    "message": "This is TrickyBird"
+  },
+  "popupOnSiteHelper": {
+    "message": "Put an address in the field on this page and TrickyBird opens it here, in this tab."
+  },
+  "popupExpiredHeading": {
+    "message": "That launch has expired"
+  },
+  "popupExpiredHelper": {
+    "message": "TrickyBird is no longer holding the address this tab was sent here with. Put it in the field on this page to start again."
   }
 }

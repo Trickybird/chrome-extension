@@ -1,8 +1,9 @@
 /**
  * The per-tab rule table. Pure.
  *
- *   2 allow   loopback and private addresses
+ *   3 allow   loopback and private addresses
  *   1 block   everything in this tab that is not the proxy
+ *   1 block   everything the proxy's own origin asks for that is not the proxy
  *
  * Only these two actions appear here, and that is the whole reason the extension never asks for
  * access to a site: Chrome requires host access for `redirect` and `modifyHeaders`, and for nothing
@@ -31,7 +32,7 @@ const LOCAL_PATTERNS = [
   '^https?://\\[?(::1|f[cde][0-9a-f]*:)',
 ];
 
-const RULES_PER_TAB = LOCAL_PATTERNS.length + 1;
+const RULES_PER_TAB = LOCAL_PATTERNS.length + 2;
 
 /**
  * @param {{ tabId: number, origin: string, endpoint: string, baseId: number }} spec
@@ -60,6 +61,21 @@ export function buildTabRules({ tabId, origin, endpoint, baseId }) {
       action: { type: /** @type {const} */ ('block') },
       condition: {
         tabIds: [tabId],
+        urlFilter: '*',
+        excludedRequestDomains: [endpointHost],
+        resourceTypes: [...ALL_TYPES],
+      },
+    },
+    // A service worker's request belongs to no tab, so every rule above misses it and a proxied page
+    // could reach the real site by registering one. Measured, then measured again with this rule:
+    // the same fetch is blocked and the server sees nothing. Scoped by who asked rather than by
+    // which tab, which is why it has no `tabIds`; it costs nothing outside the proxy's own origin.
+    {
+      id: baseId + LOCAL_PATTERNS.length + 1,
+      priority: PRIORITY.catchAll,
+      action: { type: /** @type {const} */ ('block') },
+      condition: {
+        initiatorDomains: [endpointHost],
         urlFilter: '*',
         excludedRequestDomains: [endpointHost],
         resourceTypes: [...ALL_TYPES],

@@ -72,5 +72,35 @@ say('tabs.update without "tabs"', await sw.evaluate(async () => {
   }
 }));
 
+/*
+ * The handoff cross-checks `sender.tab.id` against the tab it navigated. Chrome's reference
+ * describes onMessageExternal in terms of other extensions and leaves a page sender ambiguous, so
+ * this measures it: a real page on the console origin, served locally, speaking to a real worker.
+ */
+const CONSOLE = 'https://trickybird.com';
+await ctx.route(`${CONSOLE}/**`, (/** @type {any} */ route) =>
+  route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>probe</title>' }));
+
+const listening = sw.evaluate(() => new Promise((resolve) => {
+  chrome.runtime.onMessageExternal.addListener((_msg, sender, reply) => {
+    resolve(sender.tab === undefined ? 'absent' : `id ${sender.tab.id}`);
+    reply({ ok: true });
+    return false;
+  });
+  setTimeout(() => resolve('no message arrived'), 8000);
+}));
+
+const consolePage = await ctx.newPage();
+await consolePage.goto(`${CONSOLE}/probe`);
+say('chrome.runtime in the page', await consolePage.evaluate(
+  () => (typeof chrome === 'undefined' || !chrome.runtime ? 'absent' : 'injected')));
+const extensionId = new URL(sw.url()).host;
+await consolePage.evaluate((/** @type {string} */ id) => {
+  chrome.runtime.sendMessage(id, { v: 1, op: 'pending', nonce: 'probe' }, () => {
+    void chrome.runtime.lastError;
+  });
+}, extensionId).catch(() => {});
+say('sender.tab for a page sender', await listening);
+
 await ctx.close();
 rmSync(profile, { recursive: true, force: true });

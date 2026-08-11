@@ -2,8 +2,41 @@
 
 /** @typedef {{ endpoints: string[], autoRecover: boolean }} Settings */
 
-/** Shipped address. Anything else is granted at the moment it is added. */
+/**
+ * Which build this is. It rides on every launch link so the funnel can tell an extension launch from
+ * someone typing an address, AND tell the builds apart: there will be more than one browser, and a
+ * marker that only says "an extension" stops answering the question the day the second one ships.
+ */
+export const EXTENSION_BUILD = 'chrome';
+
+/** The one address that ships. Every other one arrives in the signed record; see fronts.js. */
 export const DEFAULT_ENDPOINTS = ['https://trickybird.com'];
+
+/**
+ * The console a developer runs behind their own Caddy. It is named in `externally_connectable` so
+ * the extension can be loaded straight from the repository and pointed at a local stack from the
+ * settings page, with no patched copy to keep in step.
+ *
+ * It costs nothing anywhere else. `.test` never resolves on the public internet, so no page can
+ * exist on that origin unless the machine was told where it lives; and even then a message from it
+ * is refused, because the sender's origin still has to be one of the addresses this install is
+ * configured to open, and that is `trickybird.com` unless somebody changed it by hand.
+ */
+export const DEV_ENDPOINT = 'https://tb-front.test';
+
+/**
+ * Where the rest of the addresses come from.
+ *
+ * `publicKey` is a public key and belongs here; the private half signs the record and lives with the
+ * production secrets, never in this repository. `minVersion` is the floor a fresh install starts
+ * from: a stored version stops a replayed record, but an install that has never seen one has nothing
+ * to compare against, so the floor rises with each release that publishes a new list.
+ */
+export const CATALOG = {
+  record: '_fronts.trickybird.com',
+  publicKey: 'BHorlFrC9M___o2wBgfu1s2flc6C2vzs_DkC6THEwtpQ4h70WWpMH401cei5InjqtqNl2F9lGNLav4zBTS4zMIU',
+  minVersion: 1,
+};
 
 const KEY = 'settings';
 

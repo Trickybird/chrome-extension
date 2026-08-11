@@ -20,6 +20,9 @@ const current = {
   optional_permissions: [...(manifest.optional_permissions ?? [])].sort(),
   host_permissions: [...(manifest.host_permissions ?? [])].sort(),
   optional_host_permissions: [...(manifest.optional_host_permissions ?? [])].sort(),
+  // Not a permission, so it raises no install warning, but it decides which origins may move the
+  // rule table. A quiet widening here is exactly what the other four fields are watched for.
+  externally_connectable: [...(manifest.externally_connectable?.matches ?? [])].sort(),
 };
 
 if (process.argv.includes('--write')) {

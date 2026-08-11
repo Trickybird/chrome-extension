@@ -9,7 +9,9 @@ const read = (/** @type {string} */ p) => readFileSync(new URL(p, import.meta.ur
 
 /** Ids the script asks the DOM for. @param {string} js */
 const requestedIds = (js) => [
-  ...js.matchAll(/(?:el|getElementById)\(\s*'([A-Za-z0-9_-]+)'\s*\)/g),
+  ...js.matchAll(/(?:el|field|getElementById)\(\s*'([A-Za-z0-9_-]+)'\s*\)/g),
+  // A table of links reaches for its ids through a variable, so the call site names nothing.
+  ...js.matchAll(/\bid:\s*'([A-Za-z0-9_-]+)'/g),
 ].map((m) => m[1]);
 
 /** Ids the markup actually defines. @param {string} html */
