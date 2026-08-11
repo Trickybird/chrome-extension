@@ -28,7 +28,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
-  // An update would otherwise leave a second copy of the entry behind.
+  // An update leaves a second copy of the entry behind.
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({
     id: MENU_ID,

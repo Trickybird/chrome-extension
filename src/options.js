@@ -106,7 +106,7 @@ el('form').addEventListener('submit', async (/** @type {Event} */ event) => {
   say(t('optionsSaved'));
 });
 
-// Element by element: one stale id would otherwise throw and blank the whole page.
+// Element by element: one stale id throws and blanks the whole page.
 for (const [id, key] of Object.entries(STATIC_TEXT)) {
   const node = el(id);
   if (node) node.textContent = t(key);

@@ -69,8 +69,8 @@ export function buildTabRules({ tabId, origin, endpoint, baseId }) {
 }
 
 /**
- * Reads a tab's fence back out of the installed rules, so a service worker restart needs no other
- * state to know which tabs are routed and through which proxy.
+ * Reads a tab's fence back out of the installed rules, so a restarted service worker needs no other
+ * state to know which tabs are routed, and through which proxy.
  *
  * @param {chrome.declarativeNetRequest.Rule[]} installed
  * @param {number} tabId

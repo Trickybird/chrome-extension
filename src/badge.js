@@ -1,10 +1,9 @@
 /**
- * The toolbar badge, with a single owner. The popup is not always there to speak for us: routing
- * from the right-click menu opens no popup at all, and a route that fails after the popup closed
- * would otherwise leave the person assuming no news was good news.
+ * The toolbar badge, with a single owner. It is the only voice when no popup is open: the
+ * right-click menu opens none, and a route can fail after the popup closes.
  *
- * Two marks, no counter. `…` means a request is in flight, `!` means the popup has something to
- * say. A number would read as unread notifications, which neither state is.
+ * `…` is a request in flight, `!` is something the popup has to say. No counter: a number reads as
+ * unread notifications, which neither state is.
  */
 
 /** @typedef {'busy'|'attention'|'none'} Badge */

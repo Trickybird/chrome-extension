@@ -1,0 +1,7 @@
+# Open an issue for anything: a site that will not route, a screen that reads wrong, an idea. The
+# template is a starting point, not a gate, and a blank issue is fine.
+blank_issues_enabled: true
+contact_links:
+  - name: Found a vulnerability?
+    url: https://github.com/Trickybird/chrome-extension/blob/main/SECURITY.md
+    about: That one goes by email, so it is not public before it is fixed. Everything else belongs in an issue.

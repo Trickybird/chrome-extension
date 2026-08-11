@@ -12,9 +12,8 @@ import { ErrorCode, RoutingError } from './errors.js';
 const sessionRules = () => chrome.declarativeNetRequest.getSessionRules();
 
 /**
- * The site's name, kept beside the rules because Chrome will not tell the background what address
- * a tab is showing. The rules stay the truth about what is routed; this is only the label the
- * settings page prints, so if the two ever disagree the label goes blank rather than wrong.
+ * The site's name, kept beside the rules because Chrome will not tell the background what a tab is
+ * showing. The rules stay the truth; this is a caption, so on disagreement it goes blank, not wrong.
  */
 const LABELS = 'routedOrigins';
 
@@ -36,9 +35,8 @@ async function forgetLabel(tabId) {
 }
 
 /**
- * Removes one tab's fence and nothing else. Clearing every rule used to be how a new route began,
- * which quietly un-fenced whatever tab was routed before: it kept showing a proxied page with
- * nothing left stopping it from reaching anywhere directly.
+ * Removes one tab's fence and nothing else. Clearing every rule would un-fence a tab that is still
+ * showing a proxied page, silently and with nothing left to stop it reaching anywhere.
  * @param {number} tabId
  */
 async function clearTab(tabId) {
@@ -51,8 +49,8 @@ async function clearTab(tabId) {
 }
 
 /**
- * Rules installed is not the same as the tab actually showing a proxied page, and the caller
- * supplies the address because reading it here would need access to the proxy.
+ * Fenced is not the same as showing a proxied page. The caller passes the address, because reading
+ * it here would need access to the proxy.
  *
  * @param {number} tabId
  * @param {string} [shownUrl]

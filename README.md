@@ -1,37 +1,28 @@
-# TrickyBird Web Proxy
+<img src="icons/icon-128.png" alt="" width="72" align="right">
+
+# TrickyBird Web Proxy for Chrome
 
 Chrome extension that routes **one tab** through the TrickyBird web proxy. Every other tab goes out
 the ordinary way.
 
-It is not a VPN. There is no country list, no server picker, and no master switch.
+Not a VPN. No country list, no server picker, no master switch.
 
 ## What routing a tab does
 
 - The proxy's servers fetch the page and rewrite it before your browser sees it, so they handle the
   address, the headers, what you type into a form, and the cookies the site sets.
-- The address bar in that tab shows one of the proxy's own addresses instead of the site's.
+- That tab's address bar shows one of the proxy's addresses instead of the site's.
 - Cookies from that site are held on the server rather than in your browser.
 
-None of that applies to any other tab.
+None of it applies to any other tab.
 
-## Ways in
+## Use it
 
-- The toolbar icon, then **Open with TrickyBird**.
-- Right-click a page or a link, then the same entry.
+The toolbar icon or the right-click menu, then **Open with TrickyBird**. On a browser page or a
+blank tab there is nothing to route, and the popup says so.
 
-On a browser page or a blank tab there is nothing to route, and the popup says so and points at the
-site, which takes an address.
-
-Neither way shows a permission dialog. See [Permissions](#permissions) for why that is safe.
-
-## Install from source
-
-Not on the Chrome Web Store yet.
-
-1. `chrome://extensions`, then Developer mode.
-2. Load unpacked, then this directory.
-
-It asks `https://trickybird.com` for a session.
+Not on the Chrome Web Store yet. To run it from source: `chrome://extensions`, Developer mode, Load
+unpacked, this directory. It asks `https://trickybird.com` for a session.
 
 ## Permissions
 
@@ -42,38 +33,25 @@ It asks `https://trickybird.com` for a session.
 ```
 
 **You are never asked for access to a site you route.** Not at install, not on the first site, not
-on the hundredth. The one host in the manifest is where sessions come from, and Chrome shows it by
-name under "Automatically allow access on the following sites" with its own switch.
+on the hundredth.
 
-That is possible because of how the rules below are built rather than by cutting a corner. Chrome
-requires host access for two [declarativeNetRequest][dnr] actions, `redirect` and `modifyHeaders`,
-and for no others. A table made of `allow` and `block` needs nothing, and a tab reaches the proxy by
-ordinary navigation instead of by redirection. A test asserts that no other action ever appears.
+That comes from how the [declarativeNetRequest][dnr] rules are built, not from cutting a corner. A
+test asserts the rule table never grows an action that would need more.
 
-Chrome lists one warning for this set, "Block content on any page", and describes site access as
-"This extension can read and change your data on sites. You can control which sites the extension
-can access."
+Chrome shows one warning for this set, "Block content on any page". The single host in the manifest
+is where sessions come from, and it appears by name with its own switch.
 
-One thing can still ask for something, and it is off by default: the offer to help when a page fails
-needs `webNavigation`, because that is what lets the extension see which page failed. The settings
-page asks at the moment you switch it on, and not before.
+One thing can still ask, and it is off by default: the offer to help when a page fails needs
+`webNavigation` to see which page failed. Settings asks at the moment you switch it on.
 
-`permissions.baseline.json` records the set; `npm run permissions` fails if the manifest drifts
-from it.
+`permissions.baseline.json` records the set. `npm run permissions` fails if the manifest drifts.
 
 ## Routing
 
-A session is minted, the tab is navigated to it, and two kinds of session rule fence the tab in,
-scoped to its tab id:
-
-| Priority | Action | Covers |
-| --- | --- | --- |
-| 2 | allow | loopback and private addresses |
-| 1 | block | every request in that tab except the proxy |
-
-Priority 2 above 1 keeps a device on your own network off the proxy. Priority 1 is the floor, so
-nothing leaves the tab except through the proxy. The rules are session-scoped and die with the
-browser session; closing the tab removes them, and they are the record of which tabs are fenced.
+A session is minted, the tab is navigated to it, and session rules fence that tab in, scoped to its
+tab id. Nothing leaves the tab except through the proxy, and a device on your own network is left
+alone. The rules die with the browser session, closing the tab removes them, and they are the record
+of which tabs are fenced.
 
 [dnr]: https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
 
@@ -85,8 +63,8 @@ npm run check    # types, tests, permission baseline
 npm run package  # reproducible zip in build/, prints its sha256
 ```
 
-No bundler and no build step. `src/` is plain ES modules loaded as-is, so what you read is what
-runs. Types are JSDoc annotations checked by `tsc --checkJs`.
+No bundler, no build step. `src/` is plain ES modules loaded as they are, so what you read is what
+runs. Types are JSDoc checked by `tsc --checkJs`.
 
 ```
 src/
@@ -100,7 +78,7 @@ src/
   session.js      opens a session, walking the addresses until one answers
   offers.js       one pending suggestion per tab
   badge.js        the toolbar badge, with a single owner
-  site-links.js   the links both surfaces carry, addressed through the session address
+  site-links.js   the links both surfaces carry
   config.js       settings
   errors.js       error codes
   messaging.js    the surface-to-background contract
@@ -108,15 +86,19 @@ src/
   options.*       settings
 ```
 
-The popup learns which site you are on from `activeTab`, which Chrome grants when you invoke the
-extension. Nothing reads a tab's address at any other time.
+The popup learns which site you are on from `activeTab`, granted when you invoke the extension.
+Nothing reads a tab's address at any other time.
 
-## Test
-
-`npm test` runs against the pure modules and the manifest. No browser, no network.
-
+`npm test` runs against the pure modules and the manifest: no browser, no network.
 `tools/platform-probe.mjs` loads the extension into a real Chromium and prints the platform limits
-the code assumes. It needs Playwright, which the test suite does not.
+the code assumes; it needs Playwright, which the tests do not.
+
+## Contributing
+
+Issues are welcome: a site that will not route, a screen that reads wrong, an idea. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+A vulnerability is the one thing that does not go in an issue. See [SECURITY.md](SECURITY.md).
 
 ## License
 
