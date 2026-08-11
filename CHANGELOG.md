@@ -37,6 +37,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 - The builder for proxy addresses. The console builds those, and nothing here had called it since.
 
+## [1.1.0]
+
+### Changed
+
+- The extension no longer opens a proxy session itself. It parks the address, sends the tab to our
+  site, and the session is opened there by a press, the same way it is for anyone who arrives by
+  typing an address. Whatever gates the site now gates the extension with it.
+- The address to open is no longer only the one in this build. The rest arrive in a signed record
+  the extension looks up over DNS, so retiring an address costs a signature rather than a release,
+  and the list cannot be read out of this repository in one afternoon.
+
+### Added
+
+- A fence around a routed tab, built from `allow` and `block` and nothing else, which is the whole
+  reason no access to any site is requested. One rule in it is scoped by who asked rather than by
+  which tab: a service worker's request belongs to no tab, and without that rule a proxied page
+  could reach the real site by registering one.
+- A right-click entry, on a page and on a link.
+- A tool that runs the whole launch in a real Chromium against three locally served hosts, because
+  the channel, the fragment, the rule table and the navigation are all things a unit test cannot
+  see.
+
+### Removed
+
+- The module that spoke to the session API, and everything with it. No request the extension makes
+  needs access to anything now.
+
 ## [1.0.3]
 
 ### Added
