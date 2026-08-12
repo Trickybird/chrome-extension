@@ -20,7 +20,9 @@
     src="https://img.shields.io/github/license/Trickybird/chrome-extension" alt="MIT licence"></a>
 </p>
 
-Not a VPN. No country list, no server picker, no master switch.
+Not a VPN. No country list, no server picker, no master switch. The proxy it routes to is
+[trickybird.com](https://trickybird.com/?utm_source=github&utm_medium=referral&utm_campaign=extension-readme), and the
+[status page](https://trickybird.com/status?utm_source=github&utm_medium=referral&utm_campaign=extension-readme) says which sites work through it today.
 
 ## What routing a tab does
 
@@ -37,7 +39,9 @@ The toolbar icon or the right-click menu, then **Open with TrickyBird**. On a br
 blank tab there is nothing to route, and the popup says so.
 
 The Chrome Web Store listing is in preparation. To run it from source: `chrome://extensions`,
-Developer mode, Load unpacked, this directory.
+Developer mode, Load unpacked, this directory. A packaged archive is attached to every
+[release](https://github.com/Trickybird/chrome-extension/releases), with the sha256 two builds of
+that commit agree on.
 
 ## Permissions
 
