@@ -80,7 +80,7 @@ const open = async () => {
 };
 
 // A page the browser could not load is the state the extension exists for.
-await sw.evaluate(async ([t, url]) => {
+await sw.evaluate(async (/** @type {any[]} */ [t, url]) => {
   await chrome.storage.session.set({ offers: { [String(t)]: { url, reason: 'failed' } } });
 }, /** @type {[number, string]} */ ([tabId, TARGET]));
 await open();
