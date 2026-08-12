@@ -1,6 +1,9 @@
 node_modules/
 build/
 *.zip
+# What "Pack extension" drops next to the folder. The key it drops with it is covered above; this
+# is the 130KB binary nobody can verify, and the release carries a rebuildable archive instead.
+*.crx
 .DS_Store
 
 # The key that signs the address catalog. `tools/sign-catalog.mjs --keygen` writes one, and it is
