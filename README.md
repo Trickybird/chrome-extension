@@ -20,6 +20,10 @@
     src="https://img.shields.io/github/license/Trickybird/chrome-extension" alt="MIT licence"></a>
 </p>
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Clicking the TrickyBird toolbar icon routes the active tab through the proxy; the address bar changes from the site's own address to the proxy's, and the page still renders.">
+</p>
+
 Not a VPN. No country list, no server picker, no master switch. The proxy it routes to is
 [trickybird.com](https://trickybird.com/?utm_source=github&utm_medium=referral&utm_campaign=extension-readme), and the
 [status page](https://trickybird.com/status?utm_source=github&utm_medium=referral&utm_campaign=extension-readme) says which sites work through it today.
