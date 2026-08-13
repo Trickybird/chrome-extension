@@ -39,9 +39,20 @@ The toolbar icon or the right-click menu, then **Open with TrickyBird**. On a br
 blank tab there is nothing to route, and the popup says so.
 
 The Chrome Web Store listing is in preparation. To run it from source: `chrome://extensions`,
-Developer mode, Load unpacked, this directory. A packaged archive is attached to every
-[release](https://github.com/Trickybird/chrome-extension/releases), with the sha256 two builds of
-that commit agree on.
+Developer mode, Load unpacked, this directory.
+
+## Verify what you run
+
+The archive attached to each [release](https://github.com/Trickybird/chrome-extension/releases) is
+not something you have to take on trust. Rebuild it from the source at that tag and the hash matches,
+byte for byte:
+
+```
+npm run package   # writes build/*.zip and prints its sha256
+```
+
+Two builds of the same commit agree on that sha256. There is no bundler and no minifier between the
+`src/` you read and the code that runs, so reading it is enough, and rebuilding it is the proof.
 
 ## Permissions
 
