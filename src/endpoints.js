@@ -30,6 +30,10 @@ export function order(list, lastGood) {
   return [...list].sort((a, b) => Number(b === lastGood) - Number(a === lastGood));
 }
 
+// Only success is recorded, and only the one address. Nothing remembers which addresses failed, so a
+// dead one is simply not preferred rather than blacklisted, and it starts being tried again the moment
+// it answers. That asymmetry is deliberate: a failure list on a client that sees one network from one
+// place would turn a local outage into a permanent verdict about a live endpoint.
 const LAST_GOOD = 'lastGoodEndpoint';
 
 /** @param {string} endpoint */

@@ -44,9 +44,15 @@ const KEY = 'settings';
 export async function readSettings() {
   const stored = /** @type {Partial<Settings> & { sessionEndpoint?: string }} */ (
     (await chrome.storage.local.get(KEY))[KEY] ?? {});
-  const carried = stored.sessionEndpoint ? [stored.sessionEndpoint] : DEFAULT_ENDPOINTS;
+  const configured = stored.endpoints?.length
+    ? stored.endpoints
+    : (stored.sessionEndpoint ? [stored.sessionEndpoint] : []);
   return {
-    endpoints: stored.endpoints?.length ? stored.endpoints : carried,
+    // A hand-typed address leads, and the shipped one stays behind it rather than being replaced by
+    // it. The settings copy promises a move to another of our addresses when the first stops
+    // answering; replacing left the install with exactly one, so a typo in that field took away the
+    // only console the extension could reach, and the promise with it.
+    endpoints: [...new Set([...configured, ...DEFAULT_ENDPOINTS])],
     autoRecover: stored.autoRecover ?? false,
   };
 }

@@ -8,7 +8,7 @@ import { fromProxyUrl } from './proxy-url.js';
 import { normalize, preferred } from './endpoints.js';
 import { openPending, pendingForTab } from './pending.js';
 import { EXTENSION_BUILD, sessionOrigins } from './config.js';
-import { canAnswerUs, firstReachable, frontEndpoints } from './fronts.js';
+import { canAnswerUs, firstReachable, frontEndpoints, isOurOwnConsole } from './fronts.js';
 import { ErrorCode, RoutingError } from './errors.js';
 
 const sessionRules = () => chrome.declarativeNetRequest.getSessionRules();
@@ -83,6 +83,13 @@ export async function stateOf(tabId, shownUrl) {
   };
 }
 
+/**
+ * Where a tab goes to be launched from: our own address, carrying the build marker so the funnel can
+ * tell an extension launch from someone typing, and the fragment that says what to open.
+ * @param {string} origin @param {string} fragment
+ */
+const consoleUrl = (origin, fragment) => `${origin}/?ext=${EXTENSION_BUILD}${fragment}`;
+
 /** base64url of a UTF-8 string, the same shape the bootstrap's `d` uses. @param {string} value */
 const encodeTarget = (value) =>
   btoa(String.fromCharCode(...new TextEncoder().encode(value)))
@@ -113,7 +120,7 @@ export async function launch({ tabId, url, originalUrl, tried = [] }) {
   const ordered = (await preferred(normalize(await frontEndpoints())))
     .filter((e) => !tried.includes(e));
   if (!ordered.length) {
-    if (originalUrl) await chrome.tabs.update(tabId, { url: originalUrl }).catch(() => {});
+    if (originalUrl) await sendAway(tabId, originalUrl).catch(() => {});
     await setBadge(tabId, 'attention');
     throw new RoutingError(ErrorCode.ENDPOINT_UNREACHABLE, `tried ${tried.length}`);
   }
@@ -131,7 +138,7 @@ export async function launch({ tabId, url, originalUrl, tried = [] }) {
   // even to the page that reads it; the address says what the person asked for and nothing more.
   const fragment = nonce ? ticketFragment(nonce) : targetFragment(encodeTarget(url));
 
-  await chrome.tabs.update(tabId, { url: `${origin}/?ext=${EXTENSION_BUILD}${fragment}` }).catch(() => {
+  await sendAway(tabId, consoleUrl(origin, fragment)).catch(() => {
     throw new RoutingError(ErrorCode.TAB_GONE, 'tab closed');
   });
   return { ok: /** @type {true} */ (true), endpoint, nonce };
@@ -149,11 +156,14 @@ export async function fence({ tabId, targetOrigin, proxyUrl }) {
   if (!still) throw new RoutingError(ErrorCode.TAB_GONE, 'tab closed');
 
   const endpoint = new URL(proxyUrl).origin;
+  // Read here rather than in `buildTabRules`, which is pure and cannot await: the fence has to name
+  // the addresses this install would open, so the page's own way home is never the thing we block.
+  const consoleHosts = sessionOrigins(await frontEndpoints()).map((o) => new URL(o).hostname);
   await clearTab(tabId);
   const baseId = allocateBaseId(await sessionRules());
   try {
     await chrome.declarativeNetRequest.updateSessionRules({
-      addRules: buildTabRules({ tabId, origin: targetOrigin, endpoint, baseId }),
+      addRules: buildTabRules({ tabId, origin: targetOrigin, endpoint, consoleHosts, baseId }),
     });
   } catch (e) {
     throw new RoutingError(ErrorCode.NO_SESSION, String(e));
@@ -182,6 +192,52 @@ export async function fence({ tabId, targetOrigin, proxyUrl }) {
 export async function unroute({ tabId, url }) {
   await forgetTab(tabId);
   if (url) await chrome.tabs.update(tabId, { url }).catch(() => {});
+  return { ok: /** @type {true} */ (true) };
+}
+
+/**
+ * Sends a tab anywhere that is not the proxy, and takes its fence off on the way. The fence lets
+ * nothing but the gateway through, so a tab still wearing one cannot even reach our own console:
+ * the browser blocks the page and tells the reader an extension did it. Every navigation away from
+ * the proxy goes through here for that reason; only `fence` navigates while a fence is standing,
+ * and it navigates to the one address the fence allows.
+ *
+ * The badge is left to the caller, because a launch is busy at this moment and a cancel is not.
+ *
+ * @param {number} tabId @param {string} url
+ */
+export async function sendAway(tabId, url) {
+  await clearTab(tabId);
+  await forgetLabel(tabId);
+  return chrome.tabs.update(tabId, { url });
+}
+
+/**
+ * The way out of a fence somebody walked into. They typed an address, the fence refused it, and the
+ * page Chrome shows for that names an extension as the culprit and offers nothing further.
+ *
+ * The refusal stands: the request never left, and nothing here relaxes a rule. What changes is where
+ * the tab ends up. It comes back to the console with the address already in the field, so one press
+ * opens it through the proxy, and it loses its own fence on the way, because leaving was the point.
+ * Every other fenced tab is untouched.
+ *
+ * @param {{ tabId: number, url: string }} req
+ */
+export async function leaveFence({ tabId, url }) {
+  const endpoints = await frontEndpoints();
+  // Where the tab is going is worked out while the fence is still up. Choosing an address means
+  // probing one, which takes as long as the network does, and an unfenced tab still showing a
+  // proxied page is a state to pass through rather than to sit in.
+  const destination = isOurOwnConsole(url, endpoints)
+    // Already one of ours, so it is the address itself that was refused, not a site to open. Sending
+    // it through the field would offer to proxy our own console, and would drop the marker the page
+    // uses to say what happened.
+    ? url
+    : consoleUrl(sessionOrigins([await firstReachable(await preferred(normalize(endpoints)))])[0],
+      targetFragment(encodeTarget(url)));
+
+  await sendAway(tabId, destination).catch(() => {});
+  await setBadge(tabId, 'none');
   return { ok: /** @type {true} */ (true) };
 }
 

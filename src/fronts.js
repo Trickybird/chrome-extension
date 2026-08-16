@@ -124,9 +124,14 @@ async function reachable(origin) {
  * Serial, not a race: a parallel round would put every address we know on the wire at once, at a
  * moment the censor chose by blocking the first one.
  *
+ * Called with nothing to walk, it throws rather than answering `undefined` under a type that says
+ * otherwise: the caller has already lost track of where the tab is going, and a tab sent to the
+ * string "undefined" ends up on a browser error page with its fence already taken off.
+ *
  * @param {string[]} ordered
  */
 export async function firstReachable(ordered) {
+  if (!ordered.length) throw new Error('no address to reach for');
   for (let i = 0; i < ordered.length; i += 1) {
     const last = i === ordered.length - 1;
     if (last || await reachable(ordered[i])) return ordered[i];

@@ -205,6 +205,28 @@ test('cancelling when nothing is in flight moves nothing', async () => {
   assert.equal(navigated[1], 'untouched');
 });
 
+/*
+ * A cancel from a tab that is still fenced used to send it home behind its own fence, and the fence
+ * lets nothing but the gateway through, so the address it was sent to was blocked by us and blamed
+ * on "an extension" by the browser.
+ */
+test('cancelling takes the fence off before sending the tab home', async () => {
+  await startLaunch({ tabId: 1, url: TARGET, originalUrl: 'https://news.example/list' });
+  // Whatever put it there, a tab wearing a fence must not be sent anywhere the fence refuses.
+  rules = [{
+    id: 4,
+    priority: 1,
+    action: { type: 'block' },
+    condition: { tabIds: [1], urlFilter: '*', excludedRequestDomains: ['gw-1.example'] },
+  }];
+
+  await cancelLaunch({ tabId: 1 });
+
+  assert.equal(rules.filter((r) => r.condition.tabIds?.[0] === 1).length, 0,
+    'the tab was sent home behind its own fence');
+  assert.equal(navigated[1], 'https://news.example/list');
+});
+
 // A name the sender chose must never reach the prototype chain: every object literal answers to
 // `constructor` and `toString`, and dispatching on one throws inside the listener instead of
 // refusing.

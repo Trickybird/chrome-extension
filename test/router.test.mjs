@@ -70,7 +70,7 @@ globalThis.fetch = /** @type {any} */ (async (/** @type {string} */ url) => {
   return { ok: true, status: 200 };
 });
 
-const { fence, forgetTab, launch, routedTabs, stateOf, unroute } = await import('../src/router.js');
+const { fence, forgetTab, launch, leaveFence, routedTabs, stateOf, unroute } = await import('../src/router.js');
 const { carriesTicket } = await import('../src/fragment.js');
 
 const BOOTSTRAP = 'https://proxy.example/_session?sId=t&d=x';
@@ -320,4 +320,103 @@ test('past the last configured address the tab goes back where it came from', as
     }),
     /TB-103/);
   assert.equal(navigated[1], 'https://news.example/article');
+});
+
+/*
+ * The same dead end, reached from our own side: a launch started on a tab that is already fenced
+ * sends it to the console, and the fence lets nothing but the gateway through. The browser then
+ * blocks our own page and tells the reader an extension did it. Pressing the panel's retry on a
+ * routed tab walked straight into this.
+ */
+test('launching from a fenced tab takes that fence off before sending it to the console', async () => {
+  await routeTo(1, 'https://one.example');
+  await routeTo(2, 'https://two.example');
+
+  await launch({ tabId: 1, url: 'https://news.example/article' });
+
+  assert.equal(rules.filter((r) => r.condition.tabIds?.[0] === 1).length, 0,
+    'the tab went to the console still fenced');
+  assert.ok(rules.some((r) => r.condition.tabIds?.[0] === 2), 'tab 2 lost a fence that was not its own');
+  assert.ok(navigated[1].startsWith('https://trickybird.com/?ext=chrome'), navigated[1]);
+});
+
+test('a launch that runs out of addresses unfences the tab it sends home', async () => {
+  await routeTo(1, 'https://one.example');
+  await assert.rejects(launch({
+    tabId: 1,
+    url: 'https://news.example/article',
+    originalUrl: 'https://news.example/article',
+    tried: ['https://trickybird.com'],
+  }), /TB-103/);
+  assert.equal(rules.filter((r) => r.condition.tabIds?.[0] === 1).length, 0,
+    'the tab was sent home behind its own fence');
+  assert.equal(navigated[1], 'https://news.example/article');
+});
+
+/*
+ * The dead end these cover: a fenced tab refuses every address but the proxy, so an address typed
+ * into it lands on Chrome's own page, which names an extension as the culprit and offers no way on.
+ * The request stays refused; what changes is that the tab is handed back to the console with the
+ * address already in it, and only that tab loses its fence.
+ */
+test('leaving the fence carries the address to the console', async () => {
+  await routeTo(1, 'https://one.example');
+  await leaveFence({ tabId: 1, url: 'https://github.com/trickybird' });
+
+  const sent = new URL(navigated[1]);
+  assert.equal(sent.origin, 'https://trickybird.com');
+  assert.equal(sent.searchParams.get('ext'), 'chrome');
+  assert.ok(sent.hash.startsWith('#u='), `expected an address fragment, got ${sent.hash}`);
+  assert.equal(Buffer.from(sent.hash.slice('#u='.length), 'base64url').toString(),
+    'https://github.com/trickybird');
+});
+
+/*
+ * Order matters here. Working out where to send the tab means probing addresses, which takes as long
+ * as the network does, and a tab that is unfenced but still showing a proxied page is a state to
+ * pass through rather than to sit in. So the destination is resolved first and the fence comes off
+ * against a navigation that is ready to go.
+ */
+test('the fence is still up while the console is being chosen', async () => {
+  // Two addresses, because the walk never probes the last one: with a single address there is
+  // nothing to wait for and the ordering this test is about cannot be observed.
+  local.settings = { endpoints: ['https://mirror.example'], autoRecover: false };
+  await routeTo(1, 'https://one.example');
+  /** @type {number[]} */
+  const rulesDuringProbe = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = /** @type {any} */ (async (/** @type {string} */ u) => {
+    rulesDuringProbe.push(rules.filter((r) => r.condition.tabIds?.[0] === 1).length);
+    return realFetch(u);
+  });
+
+  await leaveFence({ tabId: 1, url: 'https://github.com/' });
+
+  globalThis.fetch = realFetch;
+  assert.ok(rulesDuringProbe.length > 0, 'no probe ran, so this test proves nothing');
+  assert.ok(rulesDuringProbe.every((n) => n > 0),
+    `the fence was already down while probing: ${rulesDuringProbe.join(',')}`);
+});
+
+/*
+ * Once the fence lets a whole-page navigation home through, the address that gets refused is
+ * sometimes our own console anyway. Offering to open our own site through ourselves is nonsense, and
+ * encoding it into the field would drop the marker the page uses to say what happened.
+ */
+test('a refused address that is already ours is opened as itself, not as a site to proxy', async () => {
+  await routeTo(1, 'https://one.example');
+  await leaveFence({ tabId: 1, url: 'https://trickybird.com/?ext=chrome#tb=expired' });
+  assert.equal(navigated[1], 'https://trickybird.com/?ext=chrome#tb=expired');
+});
+
+test('leaving the fence frees that tab and leaves every other fence standing', async () => {
+  await routeTo(1, 'https://one.example');
+  await routeTo(2, 'https://two.example');
+  const otherRules = rules.filter((r) => r.condition.tabIds?.[0] === 2).map((r) => r.id);
+
+  await leaveFence({ tabId: 1, url: 'https://github.com/' });
+
+  assert.equal(rules.filter((r) => r.condition.tabIds?.[0] === 1).length, 0, 'tab 1 is still fenced');
+  assert.deepEqual(rules.filter((r) => r.condition.tabIds?.[0] === 2).map((r) => r.id), otherRules);
+  assert.equal((await stateOf(1)).routed, false);
 });

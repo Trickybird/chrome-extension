@@ -17,14 +17,33 @@ const OFFERABLE = new Set([
   'net::ERR_SSL_PROTOCOL_ERROR',
 ]);
 
-/** @param {{ error?: string, frameId?: number, url?: string }} details */
-export function isOfferable({ error, frameId, url }) {
-  if (frameId !== 0 || !OFFERABLE.has(error ?? '')) return false;
+/** An address the console could do something with. @param {string|undefined} url */
+const isWebAddress = (url) => {
   try {
     return /^https?:$/.test(new URL(url ?? '').protocol);
   } catch {
     return false;
   }
+};
+
+/** @param {{ error?: string, frameId?: number, url?: string }} details */
+export function isOfferable({ error, frameId, url }) {
+  return frameId === 0 && OFFERABLE.has(error ?? '') && isWebAddress(url);
+}
+
+/**
+ * The fence's own refusal, told apart from every other reason a navigation fails. It is on the
+ * closed list above and stays there: an offer would put the address behind a second press, and this
+ * one deserves an answer of its own, because Chrome's page for it names an extension as the culprit
+ * and tells the reader to switch extensions off.
+ *
+ * Chrome reports the same code for any extension's block, so being sure it was ours is the caller's
+ * job: only a tab we fenced is acted on. The shape is all that is read here.
+ *
+ * @param {{ error?: string, frameId?: number, url?: string }} details
+ */
+export function isOurOwnBlock({ error, frameId, url }) {
+  return frameId === 0 && error === 'net::ERR_BLOCKED_BY_CLIENT' && isWebAddress(url);
 }
 
 /**

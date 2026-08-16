@@ -12,7 +12,7 @@ import { frontEndpoints, refreshCatalog } from './fronts.js';
 import { remember } from './endpoints.js';
 import { verifyBootstrap } from './bootstrap-url.js';
 import { markProbed, pendingForTab, readPending, takeExpiredForTab, takePending } from './pending.js';
-import { fence, launch } from './router.js';
+import { fence, launch, sendAway } from './router.js';
 import { put } from './offers.js';
 import { setBadge } from './badge.js';
 import { ErrorCode } from './errors.js';
@@ -104,7 +104,9 @@ export async function cancelLaunch({ tabId }) {
   disarm(record.nonce);
   await takePending(record.nonce);
   await setBadge(tabId, 'none');
-  await chrome.tabs.update(tabId, { url: record.originalUrl }).catch(() => {});
+  // Through the router, not straight to the browser: a tab still wearing a fence cannot reach the
+  // address it came from either, and the fence is what has to come off first.
+  await sendAway(tabId, record.originalUrl).catch(() => {});
   return { ok: /** @type {true} */ (true) };
 }
 
