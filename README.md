@@ -153,11 +153,12 @@ Nothing reads a tab's address at any other time.
 
 `npm test` runs against the pure modules and the manifest: no browser, no network.
 
-Two optional tools need Playwright, which the tests do not. `tools/platform-probe.mjs` loads the
+A few optional tools need Playwright, which the tests do not. `tools/platform-probe.mjs` loads the
 extension into a real Chromium and prints the platform limits the code assumes.
 `tools/live-handoff.mjs` drives a whole launch through that browser, serving the three hosts
 locally: the channel, the fragment, the rule table and the navigation are all things a unit test
-cannot see.
+cannot see. `tools/record-demo.mjs` rebuilds the demo above from real captures, which is why it can
+be regenerated rather than re-recorded by hand.
 
 ## Contributing
 

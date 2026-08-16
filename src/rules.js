@@ -2,6 +2,7 @@
  * The per-tab rule table. Pure.
  *
  *   3 allow   loopback and private addresses
+ *   1 allow   a whole-page navigation back to our own console
  *   1 block   everything in this tab that is not the proxy
  *   1 block   everything the proxy's own origin asks for that is not the proxy
  *
@@ -32,17 +33,23 @@ const LOCAL_PATTERNS = [
   '^https?://\\[?(::1|f[cde][0-9a-f]*:)',
 ];
 
-const RULES_PER_TAB = LOCAL_PATTERNS.length + 2;
+/** Where the catch-all sits inside a base: the private patterns, then the way home. */
+const CATCH_ALL_OFFSET = LOCAL_PATTERNS.length + 1;
+const RULES_PER_TAB = CATCH_ALL_OFFSET + 2;
 
 /**
- * @param {{ tabId: number, origin: string, endpoint: string, baseId: number }} spec
+ * @param {{ tabId: number, origin: string, endpoint: string, consoleHosts: string[],
+ *   baseId: number }} spec
  * @returns {chrome.declarativeNetRequest.Rule[]}
  */
-export function buildTabRules({ tabId, origin, endpoint, baseId }) {
+export function buildTabRules({ tabId, origin, endpoint, consoleHosts, baseId }) {
   const target = new URL(origin);
   if (isPrivateHost(target.hostname)) {
     throw new Error(`refusing to route a private host: ${target.hostname}`);
   }
+  // A fence with no way home is the defect this argument exists to prevent, so an empty list is a
+  // programming error rather than a fence that quietly traps whoever is behind it.
+  if (!consoleHosts.length) throw new Error('a fence needs at least one console host to allow');
   if (!Number.isInteger(baseId) || baseId < 1 || baseId + RULES_PER_TAB - 1 > MAX_RULE_ID) {
     throw new Error(`rule base id ${baseId} is out of range`);
   }
@@ -55,8 +62,24 @@ export function buildTabRules({ tabId, origin, endpoint, baseId }) {
       action: { type: /** @type {const} */ ('allow') },
       condition: { tabIds: [tabId], regexFilter, resourceTypes: [...ALL_TYPES] },
     })),
+    // The page has ways home the extension never drives: the toolbar's home button, and the
+    // redirect the gateway sends once a session runs out. Both are a whole-page navigation to our
+    // own console, and the catch-all below blocked them, so a session simply expiring left the
+    // person on Chrome's page blaming an extension. Only `main_frame` passes: a proxied page still
+    // cannot fetch, ping or beacon our console, and those are the shapes that would carry a report
+    // about whoever is reading.
     {
       id: baseId + LOCAL_PATTERNS.length,
+      priority: PRIORITY.allowPrivate,
+      action: { type: /** @type {const} */ ('allow') },
+      condition: {
+        tabIds: [tabId],
+        requestDomains: [...consoleHosts],
+        resourceTypes: [/** @type {const} */ ('main_frame')],
+      },
+    },
+    {
+      id: baseId + CATCH_ALL_OFFSET,
       priority: PRIORITY.catchAll,
       action: { type: /** @type {const} */ ('block') },
       condition: {
@@ -71,7 +94,7 @@ export function buildTabRules({ tabId, origin, endpoint, baseId }) {
     // the same fetch is blocked and the server sees nothing. Scoped by who asked rather than by
     // which tab, which is why it has no `tabIds`; it costs nothing outside the proxy's own origin.
     {
-      id: baseId + LOCAL_PATTERNS.length + 1,
+      id: baseId + CATCH_ALL_OFFSET + 1,
       priority: PRIORITY.catchAll,
       action: { type: /** @type {const} */ ('block') },
       condition: {
@@ -98,7 +121,7 @@ export function readTabRule(installed, tabId) {
     && r.condition.tabIds[0] === tabId);
   if (!fence) return null;
   return {
-    baseId: fence.id - LOCAL_PATTERNS.length,
+    baseId: fence.id - CATCH_ALL_OFFSET,
     endpointHost: fence.condition.excludedRequestDomains?.[0] ?? '',
   };
 }

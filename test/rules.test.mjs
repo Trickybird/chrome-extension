@@ -6,7 +6,30 @@ import {
 
 /** @param {object} [over] */
 const spec = (over = {}) => ({
-  tabId: 7, origin: 'https://example.com', endpoint: 'https://proxy.example', baseId: 1, ...over,
+  tabId: 7, origin: 'https://example.com', endpoint: 'https://proxy.example', baseId: 1,
+  consoleHosts: ['trickybird.com'], ...over,
+});
+
+/*
+ * The proxied page has its own ways home that the extension does not drive: the toolbar's home
+ * button, and the redirect the gateway sends when a session runs out. Both are a top-level
+ * navigation to our console, and a fence that excluded only the gateway blocked them, so a session
+ * simply expiring put the person on Chrome's "blocked by an extension" page with nothing pressed.
+ * Only the top-level navigation is let through; a proxied page still cannot fetch, ping or beacon
+ * our console, because those are the request types it would use to say something about the reader.
+ */
+test('the way home is open, and only as a whole page', () => {
+  const rule = buildTabRules(spec({ consoleHosts: ['trickybird.com', 'tb-front.test'] }))
+    .find((r) => r.action.type === 'allow' && r.condition.requestDomains);
+  assert.ok(rule, 'no rule lets the tab reach our own console');
+  assert.deepEqual(rule.condition.requestDomains, ['trickybird.com', 'tb-front.test']);
+  assert.deepEqual(rule.condition.resourceTypes, ['main_frame']);
+  assert.deepEqual(rule.condition.tabIds, [7], 'the way home leaked to other tabs');
+  assert.equal(rule.priority, PRIORITY.allowPrivate, 'the catch-all would outrank it');
+});
+
+test('a fence with nowhere to call home is refused rather than built open', () => {
+  assert.throws(() => buildTabRules(spec({ consoleHosts: [] })), /console/i);
 });
 
 // Everything a tab asks for is scoped to that tab. The one exception is deliberate and covered by
@@ -96,8 +119,9 @@ test('an unrouted tab reads back as nothing', () => {
 
 test('local addresses are exempt and lookalike names are not', () => {
   const patterns = buildTabRules(spec())
-    .filter((r) => r.action.type === 'allow')
+    .filter((r) => r.condition.regexFilter)
     .map((r) => new RegExp(String(r.condition.regexFilter)));
+  assert.equal(patterns.length, 3, 'the local patterns are what this test is about');
   /** @param {string} u */
   const exempt = (u) => patterns.some((re) => re.test(u));
 
@@ -118,7 +142,7 @@ test('local addresses are exempt and lookalike names are not', () => {
 // Chrome rejects a regexFilter whose compiled form exceeds its budget, and the rule set then fails
 // to install at all. The limit is not on source length, so this guards the real constraint loosely.
 test('each local pattern stays well short of the compile budget', () => {
-  for (const rule of buildTabRules(spec()).filter((r) => r.action.type === 'allow')) {
+  for (const rule of buildTabRules(spec()).filter((r) => r.condition.regexFilter)) {
     const pattern = String(rule.condition.regexFilter);
     assert.ok(pattern.length < 120, `pattern too large: ${pattern.length}`);
   }
@@ -128,9 +152,7 @@ test('each local pattern stays well short of the compile budget', () => {
 // the rule below, a proxied page reaches the real site by registering one: measured in a real
 // Chromium, the page's fetch was blocked and its worker's went through to the server.
 test('the fence also catches what the proxy origin asks for outside any tab', () => {
-  const rules = buildTabRules({
-    tabId: 7, origin: 'https://example.com', endpoint: 'https://gw-1.example', baseId: 1,
-  });
+  const rules = buildTabRules(spec({ endpoint: 'https://gw-1.example' }));
   const tabless = rules.filter((r) => r.condition.tabIds === undefined);
   assert.equal(tabless.length, 1, 'exactly one rule may be unscoped by tab');
 
@@ -146,9 +168,7 @@ test('the fence also catches what the proxy origin asks for outside any tab', ()
 // The base id is derived from the catch-all's id when the rules are read back, so appending must not
 // move it, and removing a fence must still take every rule it added.
 test('the extra rule does not disturb reading a fence back', () => {
-  const rules = buildTabRules({
-    tabId: 7, origin: 'https://example.com', endpoint: 'https://gw-1.example', baseId: 40,
-  });
+  const rules = buildTabRules(spec({ endpoint: 'https://gw-1.example', baseId: 40 }));
   assert.deepEqual(readTabRule(rules, 7), { baseId: 40, endpointHost: 'gw-1.example' });
   assert.deepEqual(ruleIdsForBase(40), rules.map((r) => r.id));
 });

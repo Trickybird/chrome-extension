@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clearedByLoad, isOfferable } from '../src/recovery.js';
+import { clearedByLoad, isOfferable, isOurOwnBlock } from '../src/recovery.js';
 
 const failure = (over = {}) => ({
   error: 'net::ERR_NAME_NOT_RESOLVED', frameId: 0, url: 'https://example.com/', ...over,
@@ -52,4 +52,27 @@ test('our own failure is stale once the tab is somewhere else', () => {
 test('an offer a failed navigation raised is answered by a page that loads', () => {
   assert.equal(clearedByLoad({ reason: 'failed' }, false), true);
   assert.equal(clearedByLoad(null, true), true);
+});
+
+/*
+ * Our own fence is the one block on that list we can undo, and the only one where Chrome's page is
+ * worse than useless: it names an extension as the culprit and tells the reader to switch extensions
+ * off. It stays out of the offers and gets an answer of its own instead.
+ */
+test('the block the fence itself raised is recognised, and nothing else is taken for it', () => {
+  assert.equal(isOurOwnBlock(failure({ error: 'net::ERR_BLOCKED_BY_CLIENT' })), true);
+  for (const error of ['net::ERR_BLOCKED_BY_ADMINISTRATOR', 'net::ERR_NAME_NOT_RESOLVED',
+    'net::ERR_ABORTED']) {
+    assert.equal(isOurOwnBlock(failure({ error })), false, error);
+  }
+});
+
+test('a blocked subframe is not a person leaving, so it is left alone', () => {
+  assert.equal(isOurOwnBlock(failure({ error: 'net::ERR_BLOCKED_BY_CLIENT', frameId: 7 })), false);
+});
+
+test('a blocked address the console could not open anyway is left alone', () => {
+  assert.equal(
+    isOurOwnBlock(failure({ error: 'net::ERR_BLOCKED_BY_CLIENT', url: 'chrome://settings' })),
+    false);
 });

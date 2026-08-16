@@ -1,13 +1,13 @@
 /** Entry point. Registers browser events and delegates; decides nothing. */
 
 import { Message, serve } from './messaging.js';
-import { forgetTab, routedTabs, stateOf, unroute } from './router.js';
+import { forgetTab, leaveFence, routedTabs, stateOf, unroute } from './router.js';
 import { cancelLaunch, forgetLaunches, serveHandoff, startLaunch, sweepExpired } from './handoff.js';
 import { dropPendingForTab } from './pending.js';
 import { frontEndpoints, isOurOwnConsole, refreshCatalog } from './fronts.js';
 import { drop, get, put } from './offers.js';
 import { readSettings } from './config.js';
-import { clearedByLoad, isOfferable } from './recovery.js';
+import { clearedByLoad, isOfferable, isOurOwnBlock } from './recovery.js';
 import { toFailure } from './errors.js';
 
 const MENU_ID = 'route';
@@ -71,6 +71,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 /** @param {{ tabId: number, url: string, error: string, frameId: number }} details */
 async function onNavigationFailed(details) {
+  // Ours is the one refusal we can answer, and the only one worth answering without being asked: an
+  // offer would put the address behind a second press, on a page that is telling the reader to
+  // switch extensions off. The tab has to be one we fenced, because that code names no extension.
+  if (isOurOwnBlock(details) && (await stateOf(details.tabId)).routed) {
+    await leaveFence({ tabId: details.tabId, url: details.url });
+    return;
+  }
   if (!isOfferable(details)) return;
   const { autoRecover } = await readSettings();
   if (autoRecover) await put(details.tabId, details.url, 'failed');

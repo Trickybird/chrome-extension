@@ -1,4 +1,8 @@
-/** The links every surface carries. They follow the configured address, so a mirror keeps its own. */
+/**
+ * The links every surface carries. They follow the configured address, so a mirror keeps its own.
+ * Each label reuses the word the site's own navigation uses for that page, so the label names the
+ * place it leads to rather than describing it a second way.
+ */
 
 import { readSettings, siteLink } from './config.js';
 
