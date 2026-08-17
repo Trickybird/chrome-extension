@@ -1,22 +1,24 @@
 /** Entry point. Registers browser events and delegates; decides nothing. */
 
 import { Message, serve } from './messaging.js';
-import { forgetTab, leaveFence, routedTabs, stateOf, unroute } from './router.js';
+import { forgetIfLeft, forgetTab, routedTabs, stateOf, unroute } from './router.js';
 import { cancelLaunch, forgetLaunches, serveHandoff, startLaunch, sweepExpired } from './handoff.js';
 import { dropPendingForTab } from './pending.js';
 import { frontEndpoints, isOurOwnConsole, refreshCatalog } from './fronts.js';
 import { drop, get, put } from './offers.js';
 import { readSettings } from './config.js';
-import { clearedByLoad, isOfferable, isOurOwnBlock } from './recovery.js';
+import { clearedByLoad, isOfferable } from './recovery.js';
 import { toFailure } from './errors.js';
 
 const MENU_ID = 'route';
 
 serve({
   [Message.tabState]: async ({ tabId, url }) => {
-    // Before the state is read rather than after: an expired launch becomes something the panel can
-    // act on, and the panel is asking this question on its way to drawing itself.
+    // Both before the state is read rather than after, because the panel is asking this on its way
+    // to drawing itself: an expired launch becomes something it can act on, and a tab the person
+    // has already taken off the proxy stops being described as though they had not.
     await sweepExpired(tabId);
+    await forgetIfLeft(tabId, url);
     return stateOf(tabId, url);
   },
   [Message.launch]: (msg) => startLaunch(msg),
@@ -89,13 +91,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 /** @param {{ tabId: number, url: string, error: string, frameId: number }} details */
 async function onNavigationFailed(details) {
-  // Ours is the one refusal we can answer, and the only one worth answering without being asked: an
-  // offer would put the address behind a second press, on a page that is telling the reader to
-  // switch extensions off. The tab has to be one we fenced, because that code names no extension.
-  if (isOurOwnBlock(details) && (await stateOf(details.tabId)).routed) {
-    await leaveFence({ tabId: details.tabId, url: details.url });
-    return;
-  }
   if (!isOfferable(details)) return;
   const { autoRecover } = await readSettings();
   if (autoRecover) await put(details.tabId, details.url, 'failed');
@@ -116,10 +111,9 @@ const onNavigationDone = async ({ tabId, frameId, url }) => {
 };
 
 /**
- * The namespace exists only once the optional permission is granted, and one switch grants it. Two
- * independent behaviours hang off that: the offer to reopen a page that failed, and the way out of
- * a fence a person walked into. The settings page revokes it when the offer is switched off, which
- * takes the second one with it.
+ * The namespace exists only once the optional permission is granted, and one switch grants it: the
+ * offer to reopen a page that failed to load. The settings page revokes it when the offer is
+ * switched off.
  */
 function watchNavigation() {
   if (!chrome.webNavigation) return;

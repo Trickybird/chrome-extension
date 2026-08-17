@@ -32,21 +32,6 @@ export function isOfferable({ error, frameId, url }) {
 }
 
 /**
- * The fence's own refusal, told apart from every other reason a navigation fails. It is on the
- * closed list above and stays there: an offer would put the address behind a second press, and this
- * one deserves an answer of its own, because Chrome's page for it names an extension as the culprit
- * and tells the reader to switch extensions off.
- *
- * Chrome reports the same code for any extension's block, so being sure it was ours is the caller's
- * job: only a tab we fenced is acted on. The shape is all that is read here.
- *
- * @param {{ error?: string, frameId?: number, url?: string }} details
- */
-export function isOurOwnBlock({ error, frameId, url }) {
-  return frameId === 0 && error === 'net::ERR_BLOCKED_BY_CLIENT' && isWebAddress(url);
-}
-
-/**
  * Whether a page finishing its load takes the tab's offer with it. One raised by a failed navigation
  * is answered by the next load that works. Our own failure is not about the page in the tab at all:
  * it carries the address someone asked for, and while the tab is still parked on the console that
