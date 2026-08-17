@@ -42,11 +42,8 @@ const KEY = 'settings';
 
 /** @returns {Promise<Settings>} */
 export async function readSettings() {
-  const stored = /** @type {Partial<Settings> & { sessionEndpoint?: string }} */ (
-    (await chrome.storage.local.get(KEY))[KEY] ?? {});
-  const configured = stored.endpoints?.length
-    ? stored.endpoints
-    : (stored.sessionEndpoint ? [stored.sessionEndpoint] : []);
+  const stored = /** @type {Partial<Settings>} */ ((await chrome.storage.local.get(KEY))[KEY] ?? {});
+  const configured = stored.endpoints ?? [];
   return {
     // A hand-typed address leads, and the shipped one stays behind it rather than being replaced by
     // it. The settings copy promises a move to another of our addresses when the first stops

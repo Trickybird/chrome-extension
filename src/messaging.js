@@ -7,7 +7,7 @@ export const Message = {
   unroute: 'unroute',
   routedTabs: 'routedTabs',
   takeOffer: 'takeOffer',
-  dismissOffer: 'dismissOffer',
+  dropOffer: 'dropOffer',
 };
 
 /** Bumped when the console conversation changes shape. Anything else is refused. */

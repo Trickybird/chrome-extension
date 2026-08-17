@@ -49,6 +49,16 @@ test('our own failure is stale once the tab is somewhere else', () => {
   assert.equal(clearedByLoad({ reason: 'error' }, false), true);
 });
 
+/*
+ * The caller used to work out half of this rule and pass the answer in under a name that described
+ * only one of its two halves, so `reason === 'error'` was tested in two modules at once. Whether an
+ * offer survives a load is this module's question; where the tab is standing is the caller's.
+ */
+test('an offer that is not ours to keep is cleared wherever the tab is standing', () => {
+  assert.equal(clearedByLoad({ reason: 'failed' }, true), true);
+  assert.equal(clearedByLoad({ reason: 'failed' }, false), true);
+});
+
 test('an offer a failed navigation raised is answered by a page that loads', () => {
   assert.equal(clearedByLoad({ reason: 'failed' }, false), true);
   assert.equal(clearedByLoad(null, true), true);

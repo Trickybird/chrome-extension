@@ -42,21 +42,26 @@ None of it applies to any other tab.
 The toolbar icon or the right-click menu, then **Open with TrickyBird**. On a browser page or a
 blank tab there is nothing to route, and the popup says so.
 
-The Chrome Web Store listing is in preparation. To run it from source: `chrome://extensions`,
-Developer mode, Load unpacked, this directory.
+Install it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/fpkpkahleblaeljaenbjdcdelbghajfh), or run
+it from source: `chrome://extensions`, Developer mode, Load unpacked, this directory.
 
 ## Verify what you run
 
 The archive attached to each [release](https://github.com/Trickybird/chrome-extension/releases) is
-not something you have to take on trust. Rebuild it from the source at that tag and the hash matches,
-byte for byte:
+not something you have to take on trust. Check out that tag and build it yourself:
 
 ```
 npm run package   # writes build/*.zip and prints its sha256
 ```
 
-Two builds of the same commit agree on that sha256. There is no bundler and no minifier between the
-`src/` you read and the code that runs, so reading it is enough, and rebuilding it is the proof.
+Build it on Linux and the sha256 is the one in the release notes, byte for byte. The archive is built
+by the release workflow on `ubuntu-latest`, and `zip` differs enough between platforms that the same
+files packed on macOS come out to a different hash. Timestamps are pinned and entries are sorted, so
+the build is reproducible; the platform is the one thing you have to match.
+
+There is no bundler and no minifier between the `src/` you read and the code that runs, so reading it
+is enough, and rebuilding it is the proof.
 
 ## Permissions
 
@@ -97,8 +102,11 @@ the extension fence the tab, read its own rules back, and move it.
 
 The fence is session rules scoped to one tab id, plus one more scoped to the proxy's own origin: a
 service worker's request belongs to no tab, so a tab-scoped rule cannot see it. Nothing leaves that
-tab except through the proxy, and a device on your own network is left alone. The rules die with the browser session, closing the
-tab removes them, and they are the record of which tabs are fenced.
+tab except through the proxy, and a device on your own network is left alone. One more thing passes:
+a whole-page navigation back to our own site, because the page has ways home the extension does not
+drive, and a session running out is one of them. Only the navigation, never a request a page makes on
+its own. The rules die with the browser session, closing the tab removes them, and they are the
+record of which tabs are fenced.
 
 The address you opened never reaches a request line. It is either parked in memory, with the tab
 carrying a one-time code in the fragment, or carried in the fragment itself, which browsers do not

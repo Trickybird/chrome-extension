@@ -8,12 +8,12 @@ import { classify } from './target.js';
 import { carriesTicket } from './fragment.js';
 
 /** @typedef {{ ok: true, origin: string, host: string }} Routable */
-/** @typedef {{ url: string, reason: 'link'|'failed'|'error', code?: string }} Offer */
+/** @typedef {{ url: string, reason: 'failed'|'error', code?: string }} Offer */
 /**
  * @typedef {{ panel: 'onSite'|'launcher'|'expired' }} Bare
  * @typedef {{ panel: 'handoff', from: string }} Waiting
  * @typedef {{ panel: 'failed', target: Routable, url: string, code?: string }} Failed
- * @typedef {{ panel: 'offer', target: Routable, url: string, reason: Offer['reason'] }} Offered
+ * @typedef {{ panel: 'offer', target: Routable, url: string, reason: 'failed' }} Offered
  * @typedef {{ panel: 'idle', target: Routable }} Idle
  */
 
@@ -44,6 +44,8 @@ export function choose({ url, onOwnConsole, waitingFrom, offer }) {
   const target = classify(offer?.url ?? url);
   if (!target.ok) return { panel: 'launcher' };
   return offer
-    ? { panel: 'offer', target, url: offer.url, reason: offer.reason }
+    // Not a cast for convenience: the two branches above take every `error` offer, one to
+    // `failed` and the other to `launcher`, so `failed` is all that can still be in hand.
+    ? { panel: 'offer', target, url: offer.url, reason: /** @type {const} */ ('failed') }
     : { panel: 'idle', target };
 }

@@ -34,15 +34,15 @@ beforeEach(() => {
 });
 
 test('an offer is kept for its own tab and shows on its own icon', async () => {
-  await put(7, 'https://example.com/', 'link');
-  assert.deepEqual(await get(7), { url: 'https://example.com/', reason: 'link' });
+  await put(7, 'https://example.com/', 'failed');
+  assert.deepEqual(await get(7), { url: 'https://example.com/', reason: 'failed' });
   assert.equal(badge.get(7), '!');
   assert.equal(await get(8), null);
 });
 
 // Colour is never the only carrier, so the mark carries a tooltip that says the same thing.
 test('the mark comes with words', async () => {
-  await put(7, 'https://example.com/', 'link');
+  await put(7, 'https://example.com/', 'failed');
   assert.equal(titles.get(7), 'badgeAttention');
   await drop(7);
   assert.equal(titles.get(7), 'extName');
@@ -51,17 +51,17 @@ test('the mark comes with words', async () => {
 // Two failures in one tab are one suggestion, not a queue nobody asked for.
 test('a second offer for the same tab replaces the first', async () => {
   await put(7, 'https://one.example/', 'failed');
-  await put(7, 'https://two.example/', 'link');
-  assert.deepEqual(await get(7), { url: 'https://two.example/', reason: 'link' });
+  await put(7, 'https://two.example/', 'failed');
+  assert.deepEqual(await get(7), { url: 'https://two.example/', reason: 'failed' });
 });
 
 test('dropping one leaves the other tab alone', async () => {
-  await put(7, 'https://a.example/', 'link');
-  await put(8, 'https://b.example/', 'link');
+  await put(7, 'https://a.example/', 'failed');
+  await put(8, 'https://b.example/', 'failed');
   await drop(7);
   assert.equal(await get(7), null);
   assert.equal(badge.get(7), '');
-  assert.deepEqual(await get(8), { url: 'https://b.example/', reason: 'link' });
+  assert.deepEqual(await get(8), { url: 'https://b.example/', reason: 'failed' });
   assert.equal(badge.get(8), '!');
 });
 

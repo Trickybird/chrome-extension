@@ -9,7 +9,7 @@
 
 import { isPrivateHost } from './target.js';
 
-/** Why a reply was refused. Read out in support, so the values are stable. */
+/** Why a reply was refused. Nothing surfaces these yet; the tests name them, so they stay stable. */
 export const Refused = {
   scheme: 'scheme',
   private: 'private',
@@ -30,7 +30,7 @@ function decodeTarget(value) {
 
 /**
  * @param {string} proxyUrl @param {string} expectedUrl
- * @returns {{ ok: true, endpoint: string } | { ok: false, reason: string }}
+ * @returns {{ ok: true } | { ok: false, reason: string }}
  */
 export function verifyBootstrap(proxyUrl, expectedUrl) {
   let url;
@@ -52,5 +52,5 @@ export function verifyBootstrap(proxyUrl, expectedUrl) {
   }
   if (target !== expectedUrl) return { ok: false, reason: Refused.target };
 
-  return { ok: true, endpoint: url.origin };
+  return { ok: /** @type {const} */ (true) };
 }

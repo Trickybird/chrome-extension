@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.2.2]
+
+### Fixed
+
+- A launch whose site answered once and then went quiet was watched by nothing. The watchdog was
+  disarmed the moment the site asked for the address, so a connection lost after that left the
+  toolbar mark spinning and the launch aged out in silence. It is re-armed instead, and a launch that
+  goes quiet after being answered says so rather than walking to another address, which would not
+  answer any better.
+- An expired launch lost the address it was holding whenever anything else happened: opening a
+  second launch, cancelling one, or closing another tab pruned it on the way past. That address is
+  the only copy left by then, and it is what turns the expiry into a retry instead of a blank panel.
+- A tab closed between pressing route and the page moving left a live record bound to a dead tab id,
+  and Chrome hands that id to somebody else.
+- Two tabs routed in the same moment could lose one's site name or resurrect the other's, because
+  the labels were written without the queue every other record here goes through.
+- A page loading in a tab with nothing pending put out the toolbar mark, including the one a launch
+  had just lit to say it was waiting on a press.
+- An offer raised on a tab that is already going through TrickyBird lit the toolbar mark, and the
+  panel for that tab never mentions it, so the mark stayed lit with nothing behind it.
+- A tab that came through TrickyBird with nothing holding it there was described as though it were
+  held: the panel promised that closing the tab would stop it, when there was nothing to stop.
+- Chrome retires a tab id without `onRemoved` when a tab is replaced, and nothing was listening, so
+  the rules and the name stayed behind on an id that would be given away.
+
+### Changed
+
+- The public README stops saying the store listing is in preparation, and stops promising that a
+  rebuild matches byte for byte anywhere: the release archive is built on Linux, and `zip` differs
+  enough between platforms that the same files packed on macOS come out to a different hash.
+
 ## [1.2.1]
 
 ### Changed

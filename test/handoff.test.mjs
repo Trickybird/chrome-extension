@@ -1,6 +1,6 @@
 // The channel is open to every script running on our console origin, so these are the checks that
 // decide what a message may do. A hole here is a tab sent somewhere nobody asked for.
-import { test, beforeEach } from 'node:test';
+import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 /** @type {any[]} */
@@ -10,6 +10,8 @@ const session = /** @type {Record<string, any>} */ ({});
 const navigated = /** @type {Record<number, string>} */ ({});
 /** @type {((msg: any, sender: any, reply: (r: any) => void) => boolean)|null} */
 let listener = null;
+/** Tabs the browser has already lost, so a navigation to them throws the way Chrome's does. */
+const closedTabs = new Set();
 
 /** The doubles close over these objects, so a fresh test clears them in place. */
 const clear = (/** @type {Record<string, any>} */ bag) => {
@@ -30,7 +32,10 @@ const store = (/** @type {Record<string, any>} */ bag) => ({
   },
   tabs: {
     get: async (/** @type {number} */ id) => ({ id }),
-    update: async (/** @type {number} */ id, /** @type {any} */ { url }) => { navigated[id] = url; },
+    update: async (/** @type {number} */ id, /** @type {any} */ { url }) => {
+      if (closedTabs.has(id)) throw new Error('no such tab');
+      navigated[id] = url;
+    },
     query: async () => [],
   },
   storage: { local: store(local), session: store(session) },
@@ -45,7 +50,8 @@ const store = (/** @type {Record<string, any>} */ bag) => ({
   },
 };
 
-const { cancelLaunch, serveHandoff, startLaunch, sweepExpired } = await import('../src/handoff.js');
+const { cancelLaunch, forgetLaunches, serveHandoff, startLaunch, sweepExpired } =
+  await import('../src/handoff.js');
 const { readPending } = await import('../src/pending.js');
 serveHandoff();
 
@@ -62,16 +68,27 @@ const say = (/** @type {any} */ msg, /** @type {any} */ sender = { origin: CONSO
   });
 
 /** Starts a launch and returns the nonce the extension parked it under. */
+/** @type {{ tabId: number, nonce: string }[]} */
+const started = [];
+
 async function begin(tabId = 1) {
   await startLaunch({ tabId, url: TARGET });
-  return navigated[tabId].split('#ticket=')[1];
+  const nonce = navigated[tabId].split('#ticket=')[1];
+  started.push({ tabId, nonce });
+  return nonce;
 }
+
+// A launch nobody finished is still being watched, and a pending timer keeps the runner alive.
+afterEach(() => {
+  for (const { tabId, nonce } of started.splice(0)) forgetLaunches(tabId, [nonce]);
+});
 
 beforeEach(() => {
   rules = [];
   clear(local);
   clear(session);
   clear(navigated);
+  closedTabs.clear();
 });
 
 test('the console is told which address the nonce stands for', async () => {
@@ -253,11 +270,62 @@ test('a launch that ran out of time becomes an offer to try it again', async () 
   assert.equal(await readPending(nonce), null);
 });
 
+/*
+ * An expired record is the last thing holding the address someone asked for, and the sweep is what
+ * turns it into a retry. Every write used to prune the whole set on its way past, so a launch in
+ * another tab, or a cancel, or a tab closing, reaped that record before anyone could look at it, and
+ * the panel fell through to the bare expired state with nothing to offer.
+ */
+test('a launch in another tab does not reap an expired record before it can be offered', async () => {
+  const nonce = await begin();
+  session.pending[nonce].createdAt -= 6 * 60 * 1000;
+
+  await startLaunch({ tabId: 2, url: 'https://other.example/', originalUrl: 'https://other.example/' });
+
+  await sweepExpired(1);
+  assert.deepEqual(session.offers, { 1: { url: TARGET, reason: 'error', code: 'TB-106' } });
+});
+
+/*
+ * The console asking for the address used to disarm the watchdog outright, so a console that spoke
+ * once and then died — network gone, mint hung, tab navigated away by hand — had no timeout at all.
+ * The badge stayed busy, the record aged out in silence, and the only recovery was opening the popup
+ * on that exact tab.
+ */
+test('a console that asks and then goes quiet still gets answered', async () => {
+  const nonce = await begin();
+
+  // The watchdog is module-private and should stay that way, so this drives the clock rather than
+  // reaching for the timer: what a person would see is the offer, not the callback. Enabled before
+  // the answer, because a timer already scheduled by the real clock is not one a mock can reach.
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    await say({ v: 1, op: 'pending', nonce });
+    mock.timers.tick(10 * 60 * 1000);
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+  } finally {
+    mock.timers.reset();
+  }
+
+  assert.ok(session.offers?.[1], 'the launch was left with nothing watching it');
+});
+
 test('a launch still inside its window is left where it is', async () => {
   const nonce = await begin();
   await sweepExpired(1);
   assert.deepEqual(session.offers ?? {}, {});
   assert.equal((await readPending(nonce))?.url, TARGET);
+});
+
+/*
+ * The record is opened before the navigation and was not consumed when the navigation failed, so a
+ * tab closed in that window left a live record bound to a dead id. `onRemoved` has already run by
+ * then and found nothing to drop.
+ */
+test('a tab that dies before its launch navigates leaves no record behind', async () => {
+  closedTabs.add(9);
+  await assert.rejects(startLaunch({ tabId: 9, url: TARGET, originalUrl: TARGET }), /TB-10/);
+  assert.deepEqual(session.pending ?? {}, {}, 'a record survived the tab it was opened for');
 });
 
 test('a tab with no launch behind it sweeps to nothing', async () => {

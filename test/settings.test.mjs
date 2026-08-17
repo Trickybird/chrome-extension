@@ -43,12 +43,6 @@ test('typing the address that ships does not duplicate it', async () => {
   assert.deepEqual((await readSettings()).endpoints, DEFAULT_ENDPOINTS);
 });
 
-// The pre-1.1 shape kept a single address under its own key.
-test('an address carried over from the old shape also keeps the shipped one behind it', async () => {
-  Object.assign(local, { settings: { sessionEndpoint: 'https://old.example' } });
-  assert.deepEqual((await readSettings()).endpoints, ['https://old.example', ...DEFAULT_ENDPOINTS]);
-});
-
 test('autoRecover is off until someone turns it on', async () => {
   assert.equal((await readSettings()).autoRecover, false);
   await writeSettings({ autoRecover: true });

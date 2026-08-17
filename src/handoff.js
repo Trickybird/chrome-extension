@@ -21,7 +21,15 @@ import { HANDOFF_CANCELLED, HANDOFF_VERSION, serveExternal } from './messaging.j
 // A page load plus a cold service worker. Past this the console is treated as not having answered.
 // The timer is the worker's and dies with it, which is survivable rather than correct: a launch
 // nobody answered for then waits out its record instead, and the sweep turns that into a retry.
-export const PROBE_TIMEOUT_MS = 8000;
+const CONSOLE_SILENCE_MS = 8000;
+
+/*
+ * The console asked for the address, so it is alive and a person is now looking at a button. That
+ * deserves longer than the first wait, and it deserves not to be nothing: disarming here left a
+ * console that spoke once and then died with no timeout at all, a badge stuck on busy, and a record
+ * that aged out in silence.
+ */
+const HANDOFF_SILENCE_MS = 5 * 60 * 1000;
 
 /** @type {Map<string, ReturnType<typeof setTimeout>>} */
 const watchdogs = new Map();
@@ -34,9 +42,22 @@ function disarm(nonce) {
 }
 
 /** @param {string} nonce */
-function arm(nonce) {
+/**
+ * A nonce spends once, and its watchdog dies with it. Both halves together, because a spend that
+ * leaves the timer running fires `onSilence` for a launch that already finished.
+ *
+ * Not used by `onSilence` itself, which takes the record while running from that very timer.
+ * @param {string} nonce
+ */
+async function spend(nonce) {
   disarm(nonce);
-  watchdogs.set(nonce, setTimeout(() => void onSilence(nonce), PROBE_TIMEOUT_MS));
+  return takePending(nonce);
+}
+
+/** @param {string} nonce @param {number} [after] */
+function arm(nonce, after = CONSOLE_SILENCE_MS) {
+  disarm(nonce);
+  watchdogs.set(nonce, setTimeout(() => void onSilence(nonce), after));
 }
 
 /**
@@ -47,7 +68,14 @@ function arm(nonce) {
 async function onSilence(nonce) {
   watchdogs.delete(nonce);
   const record = await takePending(nonce);
-  if (!record || record.probed) return;
+  if (!record) return;
+  // The console showed up and then went quiet, so the address walk stops: another front would not
+  // answer any better. What must not stop is telling anyone. This is the same end `sweepExpired`
+  // reaches, except nobody has to open the popup on that tab for it to happen.
+  if (record.probed) {
+    await put(record.tabId, record.url, 'error', ErrorCode.LAUNCH_EXPIRED);
+    return;
+  }
   try {
     const next = (await launch({
       tabId: record.tabId,
@@ -101,8 +129,7 @@ export async function startLaunch(req) {
 export async function cancelLaunch({ tabId }) {
   const record = await pendingForTab(tabId);
   if (!record) return { ok: /** @type {true} */ (true) };
-  disarm(record.nonce);
-  await takePending(record.nonce);
+  await spend(record.nonce);
   await setBadge(tabId, 'none');
   // Through the router, not straight to the browser: a tab still wearing a fence cannot reach the
   // address it came from either, and the fence is what has to come off first.
@@ -142,7 +169,7 @@ export function serveHandoff() {
     pending: async (msg, sender) => {
       const record = await authorize(msg, sender);
       if (!record) return { ok: false };
-      disarm(msg.nonce);
+      arm(msg.nonce, HANDOFF_SILENCE_MS);
       await markProbed(msg.nonce);
       // It answered, so it goes first next time. There is no request left to learn that from.
       await remember(record.endpoint);
@@ -163,14 +190,12 @@ export function serveHandoff() {
       try {
         await fence({ tabId: record.tabId, targetOrigin: record.targetOrigin, proxyUrl });
       } catch (e) {
-        await takePending(msg.nonce);
-        disarm(msg.nonce);
+        await spend(msg.nonce);
         await put(record.tabId, record.url, 'error',
           /** @type {any} */ (e)?.code ?? ErrorCode.NO_SESSION);
         return { ok: false };
       }
-      await takePending(msg.nonce);
-      disarm(msg.nonce);
+      await spend(msg.nonce);
       return { ok: true };
     },
 
@@ -185,8 +210,7 @@ export function serveHandoff() {
     failed: async (msg, sender) => {
       const record = await authorize(msg, sender);
       if (!record) return { ok: false };
-      await takePending(msg.nonce);
-      disarm(msg.nonce);
+      await spend(msg.nonce);
       if (msg.reason === HANDOFF_CANCELLED) await setBadge(record.tabId, 'none');
       else await put(record.tabId, record.url, 'error', ErrorCode.NO_SESSION);
       return { ok: true };
