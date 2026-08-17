@@ -6,7 +6,7 @@
 import { setBadge } from './badge.js';
 import { sessionMap } from './session-map.js';
 
-/** @typedef {{ url: string, reason: 'link'|'failed'|'error', code?: string }} Offer */
+/** @typedef {{ url: string, reason: 'failed'|'error', code?: string }} Offer */
 
 const store = /** @type {import('./session-map.js').SessionMap<Offer>} */ (sessionMap('offers'));
 

@@ -2,11 +2,12 @@
 
 import { allocateBaseId, buildTabRules, readTabRule, ruleIdsForBase } from './rules.js';
 import { setBadge } from './badge.js';
+import { sessionMap } from './session-map.js';
 import { targetFragment, ticketFragment } from './fragment.js';
 import { classify, NotRoutable } from './target.js';
 import { fromProxyUrl } from './proxy-url.js';
 import { normalize, preferred } from './endpoints.js';
-import { openPending, pendingForTab } from './pending.js';
+import { openPending, pendingForTab, takePending } from './pending.js';
 import { EXTENSION_BUILD, sessionOrigins } from './config.js';
 import { canAnswerUs, firstReachable, frontEndpoints, isOurOwnConsole } from './fronts.js';
 import { ErrorCode, RoutingError } from './errors.js';
@@ -16,25 +17,27 @@ const sessionRules = () => chrome.declarativeNetRequest.getSessionRules();
 /**
  * The site's name, kept beside the rules because Chrome will not tell the background what a tab is
  * showing. The rules stay the truth; this is a caption, so on disagreement it goes blank, not wrong.
+ *
+ * Through the same queue as every other set here. Read-modify-write against storage is not atomic,
+ * and two tabs routed in the same moment each read this map and each write it back: one label is
+ * lost, or one that was just deleted comes back to caption a tab it does not belong to.
  */
-const LABELS = 'routedOrigins';
+const labelStore = /** @type {import('./session-map.js').SessionMap<string>} */
+  (sessionMap('routedOrigins'));
 
 /** @returns {Promise<Record<string, string>>} */
-const labels = async () => /** @type {Record<string, string>} */ (
-  (await chrome.storage.session.get(LABELS))[LABELS] ?? {});
+const labels = () => labelStore.read();
 
 /** @param {number} tabId @param {string} origin */
-async function label(tabId, origin) {
-  await chrome.storage.session.set({ [LABELS]: { ...(await labels()), [String(tabId)]: origin } });
-}
+const label = (tabId, origin) =>
+  labelStore.update((records) => [{ ...records, [String(tabId)]: origin }, null]);
 
 /** @param {number} tabId */
-async function forgetLabel(tabId) {
-  const rest = await labels();
-  if (!rest[String(tabId)]) return;
-  delete rest[String(tabId)];
-  await chrome.storage.session.set({ [LABELS]: rest });
-}
+const forgetLabel = (tabId) => labelStore.update((records) => {
+  if (!records[String(tabId)]) return [records, null];
+  const { [String(tabId)]: gone, ...rest } = records;
+  return [rest, null];
+});
 
 /**
  * Removes one tab's fence and nothing else. Clearing every rule would un-fence a tab that is still
@@ -128,6 +131,7 @@ export async function launch({ tabId, url, originalUrl, tried = [] }) {
   const [origin] = sessionOrigins([endpoint]);
 
   await setBadge(tabId, 'busy');
+  /** @type {string|undefined} */
   let nonce;
   if (canAnswerUs(origin)) {
     nonce = await openPending({
@@ -138,7 +142,11 @@ export async function launch({ tabId, url, originalUrl, tried = [] }) {
   // even to the page that reads it; the address says what the person asked for and nothing more.
   const fragment = nonce ? ticketFragment(nonce) : targetFragment(encodeTarget(url));
 
-  await sendAway(tabId, consoleUrl(origin, fragment)).catch(() => {
+  await sendAway(tabId, consoleUrl(origin, fragment)).catch(async () => {
+    // The record is opened before the navigation, so a tab that dies in between leaves it bound to
+    // an id Chrome will hand to somebody else. The panel on that stranger's tab would then offer to
+    // finish a launch they never started.
+    if (nonce) await takePending(nonce);
     throw new RoutingError(ErrorCode.TAB_GONE, 'tab closed');
   });
   return { ok: /** @type {true} */ (true), endpoint, nonce };
@@ -190,8 +198,12 @@ export async function fence({ tabId, targetOrigin, proxyUrl }) {
 
 /** @param {{ tabId: number, url?: string }} req */
 export async function unroute({ tabId, url }) {
-  await forgetTab(tabId);
-  if (url) await chrome.tabs.update(tabId, { url }).catch(() => {});
+  await setBadge(tabId, 'none');
+  // The same door every other departure takes. Behaviour is unchanged today; what changes is that
+  // the rule "unfence before you navigate" is stated once instead of in every exit that grew its
+  // own copy of it.
+  if (url) await sendAway(tabId, url).catch(() => {});
+  else await forgetTab(tabId);
   return { ok: /** @type {true} */ (true) };
 }
 

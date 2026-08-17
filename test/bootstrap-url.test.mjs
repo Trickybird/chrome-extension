@@ -10,7 +10,7 @@ const bootstrap = (/** @type {string} */ target, extra = '') =>
 
 test('a real bootstrap for the address we asked for is accepted', () => {
   assert.deepEqual(verifyBootstrap(bootstrap(TARGET), TARGET),
-    { ok: true, endpoint: 'https://gw-1.example' });
+    { ok: true });
 });
 
 // A share-link mint appends `&j=1`. Extra parameters are the API's business, not ours.

@@ -3,7 +3,7 @@
 // unlabelled button. That shipped once. This is the guard.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 const read = (/** @type {string} */ p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
@@ -43,6 +43,26 @@ for (const surface of ['popup', 'options']) {
     assert.deepEqual(missing, [], `${surface} looks up strings the catalog does not have`);
   });
 }
+
+/*
+ * The other direction, and the one that rots quietly: a string whose last reader was deleted stays
+ * in the catalogue, gets translated, and describes a screen nobody can reach. Two of them lived
+ * there for a release behind a reason no code produced any more.
+ */
+test('the catalog has no string nobody reads', () => {
+  // Every module, not just the two surfaces: a badge string is named in badge.js, an error string in
+  // errors.js, and the context menu's in background.js.
+  const js = readdirSync(new URL('../src/', import.meta.url))
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => read(`../src/${f}`)).join('\n');
+  const html = ['popup.html', 'options.html'].map((f) => read(`../src/${f}`)).join('\n');
+  const manifest = read('../manifest.json');
+  const catalog = JSON.parse(read('../_locales/en/messages.json'));
+
+  const orphans = Object.keys(catalog).filter((key) =>
+    !js.includes(`'${key}'`) && !html.includes(`__MSG_${key}__`) && !manifest.includes(`__MSG_${key}__`));
+  assert.deepEqual(orphans, [], 'the catalog carries strings nothing looks up');
+});
 
 test('the markup loads only local styles and scripts', () => {
   for (const surface of ['popup', 'options']) {

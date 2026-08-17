@@ -23,21 +23,39 @@ serve({
   [Message.cancelLaunch]: (msg) => cancelLaunch(msg),
   [Message.unroute]: (msg) => unroute(msg),
   [Message.routedTabs]: () => routedTabs(),
+  // The routed panel does not read an offer, so this is how the badge it lit goes out.
+  [Message.dropOffer]: ({ tabId }) => drop(tabId),
   [Message.takeOffer]: async ({ tabId }) => {
     const offer = await get(tabId);
     if (offer) await drop(tabId);
     return offer;
   },
-  [Message.dismissOffer]: ({ tabId }) => drop(tabId),
 }, toFailure);
 
 serveHandoff();
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+/** Everything keyed to a tab id, let go at once. @param {number} tabId */
+function forgetEverythingAbout(tabId) {
   void forgetTab(tabId);
   void drop(tabId);
   void dropPendingForTab(tabId).then((nonces) => forgetLaunches(tabId, nonces));
-});
+}
+
+chrome.tabs.onRemoved.addListener(forgetEverythingAbout);
+
+/*
+ * The other way a tab ends. Chrome sends this instead of `onRemoved` when a tab is replaced, which
+ * prerendering does and discarding may; the id it hands out afterwards is a different one, and this
+ * codebase assumes everywhere that a dead id leaves nothing behind, because Chrome gives that id to
+ * somebody else.
+ *
+ * Only the old id is cleaned. Moving the fence across would mean rebuilding it from what a rule
+ * remembers, and a rule remembers the endpoint's host without its port, so the rebuilt fence could
+ * name an address the tab never came from. A tab that comes back unfenced is the same state a
+ * browser restart leaves, and it is answered where that one is.
+ */
+chrome.tabs.onReplaced.addListener((_addedTabId, removedTabId) =>
+  forgetEverythingAbout(removedTabId));
 
 /*
  * The address list is fetched while the network still works, not when it stops. By the time our
@@ -87,17 +105,30 @@ async function onNavigationFailed(details) {
 const onNavigationDone = async ({ tabId, frameId, url }) => {
   if (frameId !== 0) return;
   const offer = await get(tabId);
-  // The address list is only worth reading when the tab holds a failure that could outlive the load.
-  const parked = offer?.reason === 'error' && isOurOwnConsole(url ?? '', await frontEndpoints());
-  if (!clearedByLoad(offer, parked)) return;
+  // With nothing held for this tab there is nothing to clear, and `drop` also puts the badge out.
+  // A launch sets that badge to busy and then sends the tab to the console; the console finishing
+  // its load used to land here and wipe the one thing saying the launch was waiting on a press.
+  if (!offer) return;
+  // Only the address list is the caller's business. Whether the offer survives a load is decided in
+  // one place, and it is not this one.
+  if (!clearedByLoad(offer, isOurOwnConsole(url ?? '', await frontEndpoints()))) return;
   void drop(tabId);
 };
 
-/** The namespace exists only once the optional permission is granted. */
+/**
+ * The namespace exists only once the optional permission is granted, and one switch grants it. Two
+ * independent behaviours hang off that: the offer to reopen a page that failed, and the way out of
+ * a fence a person walked into. The settings page revokes it when the offer is switched off, which
+ * takes the second one with it.
+ */
 function watchNavigation() {
   if (!chrome.webNavigation) return;
+  // Each guarded on its own: revoking and granting again runs this a second time, and a guard that
+  // covers only the first listener registers the second one twice.
   if (!chrome.webNavigation.onErrorOccurred.hasListener(onNavigationFailed)) {
     chrome.webNavigation.onErrorOccurred.addListener(onNavigationFailed);
+  }
+  if (!chrome.webNavigation.onCompleted.hasListener(onNavigationDone)) {
     chrome.webNavigation.onCompleted.addListener(onNavigationDone);
   }
 }

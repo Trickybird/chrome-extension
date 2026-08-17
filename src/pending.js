@@ -27,7 +27,14 @@ function newNonce() {
 
 const store = /** @type {import('./session-map.js').SessionMap<Pending>} */ (sessionMap('pending'));
 
-/** Expiry is enforced on every read, so no timer has to survive the worker. @param {number} now */
+/**
+ * Expiry is enforced on every read, so no timer has to survive the worker. A read filter and nothing
+ * more: writing this back would delete what it hides, and an expired record is the last thing
+ * holding the address someone asked for. Reaping belongs to the two functions that hand a record
+ * over, `takeExpiredForTab` and `dropPendingForTab`, because both have somewhere to put it.
+ *
+ * @param {number} now
+ */
 const live = (/** @type {Record<string, Pending>} */ records, now) =>
   Object.fromEntries(Object.entries(records).filter(([, r]) => now - r.createdAt < PENDING_TTL_MS));
 
@@ -39,7 +46,7 @@ export async function openPending(record) {
   const nonce = newNonce();
   const now = Date.now();
   await store.update((records) =>
-    [{ ...live(records, now), [nonce]: { ...record, createdAt: now, probed: false } }, null]);
+    [{ ...records, [nonce]: { ...record, createdAt: now, probed: false } }, null]);
   return nonce;
 }
 
@@ -51,20 +58,18 @@ export async function readPending(/** @type {string} */ nonce) {
 /** The console arrived. Told apart from silence, which is what the watchdog acts on. */
 export function markProbed(/** @type {string} */ nonce) {
   return store.update((raw) => {
-    const records = live(raw, Date.now());
-    if (!records[nonce]) return [raw, null];
-    const probed = { ...records[nonce], probed: true };
-    return [{ ...records, [nonce]: probed }, probed];
+    if (!live(raw, Date.now())[nonce]) return [raw, null];
+    const probed = { ...raw[nonce], probed: true };
+    return [{ ...raw, [nonce]: probed }, probed];
   });
 }
 
 /** Consumes. A nonce spends once, so a replayed handoff finds nothing. */
 export function takePending(/** @type {string} */ nonce) {
   return store.update((raw) => {
-    const records = live(raw, Date.now());
-    const record = records[nonce] ?? null;
-    delete records[nonce];
-    return [records, record];
+    const record = live(raw, Date.now())[nonce] ?? null;
+    const { [nonce]: spent, ...rest } = raw;
+    return [spent ? rest : raw, record];
   });
 }
 
@@ -78,10 +83,13 @@ export async function pendingForTab(tabId) {
 /** @param {number} tabId @returns {Promise<string[]>} the nonces that died with it */
 export function dropPendingForTab(tabId) {
   return store.update((raw) => {
-    const records = live(raw, Date.now());
-    const dead = Object.keys(records).filter((n) => records[n].tabId === tabId);
+    // Raw, not live: the tab is gone, so an expired record of its own has nobody left to offer it
+    // to either, and leaving it behind is how the set grows without bound.
+    const dead = Object.keys(raw).filter((n) => raw[n].tabId === tabId);
+    if (!dead.length) return [raw, dead];
+    const records = { ...raw };
     for (const nonce of dead) delete records[nonce];
-    return [dead.length ? records : raw, dead];
+    return [records, dead];
   });
 }
 

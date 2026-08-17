@@ -80,12 +80,6 @@
   "popupIdleHelper": {
     "message": "This tab goes to our site, then one more press opens the page. Stopping later is one click."
   },
-  "popupOfferLinkHeading": {
-    "message": "Open this link with TrickyBird"
-  },
-  "popupOfferLinkBody": {
-    "message": "TrickyBird fetches it through our servers and opens it in this tab."
-  },
   "popupOfferFailedHeading": {
     "message": "This page didn’t open"
   },
@@ -115,6 +109,9 @@
   },
   "popupRoutedHelper": {
     "message": "When you stop, the page reloads straight from the site. Closing this tab stops it too."
+  },
+  "popupUnfencedHelper": {
+    "message": "This page came through TrickyBird, but nothing is holding this tab to it now, so a link may take you straight to the site. Leaving goes back to the page itself."
   },
   "popupStaleHeading": {
     "message": "This page didn’t come from TrickyBird"

@@ -28,7 +28,7 @@ const el = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
  * @property {string} [helper]
  */
 /** @typedef {{ ok: true, origin: string, host: string }} Routable */
-/** @typedef {{ url: string, reason: 'link'|'failed'|'error', code?: string }} Offer */
+/** @typedef {{ url: string, reason: 'failed'|'error', code?: string }} Offer */
 
 const view = {
   heading: el('heading'), address: el('artAddress'), status: el('status'),
@@ -45,11 +45,9 @@ const FIRST_RUN_SEEN = 'firstRunSeen';
 /** Whether the long first-run explanation was on screen this time, which is what the flag gates. */
 let firstRunShown = false;
 const ADDRESS_CHARS = 32;
-// Six seconds for a page that is slow, checked often enough that the payoff is not held back.
 
-/** @type {Record<string, { heading: string, body: string }>} */
+/** The one reason that reaches here: an `error` offer is answered by `fail()` before this. */
 const OFFER_TEXT = {
-  link: { heading: 'popupOfferLinkHeading', body: 'popupOfferLinkBody' },
   failed: { heading: 'popupOfferFailedHeading', body: 'popupOfferFailedBody' },
 };
 
@@ -113,9 +111,13 @@ async function main() {
   if (!tab?.id) return renderLauncher();
 
   const state = await send(Message.tabState, { tabId: tab.id, url: tab.url });
-  // Fenced or not, a page that came through us gets the panel that can take the tab back out, and
-  // it is the one state that leaves an unread offer alone.
-  if (state?.routed || state?.proxied) return renderRouted(tab, state);
+  // Fenced or not, a page that came through us gets the panel that can take the tab back out. An
+  // offer raised on such a tab is not shown there, but the badge it lit has to go out anyway: left
+  // alone it claims this popup has something to say, and the popup then says nothing.
+  if (state?.routed || state?.proxied) {
+    void send(Message.dropOffer, { tabId: tab.id });
+    return renderRouted(tab, state);
+  }
 
   // Taking it here is what marks it seen; the badge means nobody has looked yet.
   const offer = /** @type {Offer|null} */ (await send(Message.takeOffer, { tabId: tab.id }));
@@ -223,11 +225,14 @@ async function renderIdle(tab, target) {
 }
 
 /**
+ * The one reason that gets here: `choose` answers an `error` offer with the failure panel or the
+ * launcher, never with this one.
+ *
  * @param {chrome.tabs.Tab} tab @param {Routable} target @param {string} url
- * @param {Offer['reason']} reason
+ * @param {'failed'} reason
  */
 function renderOffer(tab, target, url, reason) {
-  const text = OFFER_TEXT[reason] ?? OFFER_TEXT.link;
+  const text = OFFER_TEXT[reason];
   render({
     heading: t(text.heading),
     address: target.host,
@@ -240,11 +245,18 @@ function renderOffer(tab, target, url, reason) {
   });
 }
 
-/** @param {chrome.tabs.Tab} tab @param {{ origin: string, proven?: boolean|null }} state */
+/**
+ * @param {chrome.tabs.Tab} tab
+ * @param {{ origin: string, routed?: boolean, proven?: boolean|null }} state
+ */
 function renderRouted(tab, state) {
   // Only a tab we can positively see somewhere else is stale. Not being able to read the address
   // proves nothing, and the fence is installed either way.
   const proven = state.proven !== false;
+  // The page came through us and nothing is holding the tab to it: an address that cannot answer us
+  // never gets a fence, and one that had a fence loses it when the browser restarts. Both promises
+  // the fenced panel makes are false here, so it does not make them.
+  const fenced = Boolean(state.routed);
   // Back to the page they were reading, not the site's front door.
   const shown = fromProxyUrl(tab.url ?? '');
   const exitTo = shown ? `${shown.origin}${shown.path}` : state.origin;
@@ -257,14 +269,15 @@ function renderRouted(tab, state) {
     primary: proven ? null : { label: t('popupStaleAction'), onClick: () => retry(tab, state.origin) },
     secondary: {
       label: t('popupRoutedAction'),
-      // Undoing the thing the panel is currently celebrating: the one action here worth a warning colour.
-      danger: true,
+      // Undoing the thing the panel is currently celebrating: the one action here worth a warning
+      // colour. With no fence there is nothing to undo, so it is a way back rather than a warning.
+      danger: fenced,
       onClick: async () => {
         await send(Message.unroute, { tabId: tab.id, url: exitTo });
         window.close();
       },
     },
-    helper: proven ? t('popupRoutedHelper') : '',
+    helper: fenced ? (proven ? t('popupRoutedHelper') : '') : t('popupUnfencedHelper'),
   });
 }
 
@@ -276,7 +289,6 @@ function retry(tab, origin) {
 
 /** @param {chrome.tabs.Tab} tab @param {Routable} target @param {string} [url] */
 async function start(tab, target, url) {
-  const explanationWasRead = firstRunShown;
   // Read before render() overwrites the nodes. The panel keeps its furniture through the wait;
   // dropping it resized the popup twice per route, the first time mid-click.
   const keep = {
@@ -289,7 +301,7 @@ async function start(tab, target, url) {
     ...keep,
     primary: { label: t('popupIdleAction'), disabled: true },
   });
-  if (explanationWasRead) await chrome.storage.local.set({ [FIRST_RUN_SEEN]: true });
+  if (firstRunShown) await chrome.storage.local.set({ [FIRST_RUN_SEEN]: true });
 
   const result = await send(Message.launch, { tabId: tab.id, url: url ?? tab.url });
   if (!result?.ok) return fail(result?.code ?? ErrorCode.NO_SESSION, tab, target);

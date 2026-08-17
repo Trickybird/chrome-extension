@@ -120,8 +120,11 @@ el('form').addEventListener('submit', async (/** @type {Event} */ event) => {
       return;
     }
   } else {
-    // Handed back rather than kept. Nothing reads it once the offer is off, and a browser still
-    // listing a permission against us for a switch nobody uses is a claim we would rather not make.
+    // Handed back rather than kept: a browser still listing a permission against us for a switch
+    // nobody uses is a claim we would rather not make. It costs one thing, and the cost is named
+    // here rather than discovered later. The same namespace arms the way out of a fence
+    // (`watchNavigation` in background.js), so turning this off also turns that off: an address
+    // typed into a routed tab goes back to being Chrome's own block page.
     await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
   }
 
