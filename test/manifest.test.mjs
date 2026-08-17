@@ -7,6 +7,18 @@ import { DEFAULT_ENDPOINTS, DEV_ENDPOINT } from '../src/config.js';
 const read = (p) => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 const manifest = read('../manifest.json');
 const messages = read('../_locales/en/messages.json');
+const pkg = read('../package.json');
+
+/*
+ * The version lives in two files and nothing compared them, so they could drift silently. It matters
+ * because they are read by different things: the store reads the manifest, and `tools/package.mjs`
+ * names the archive from the manifest while the release the archive is attached to is cut from the
+ * tag. A mismatch ships an archive whose name disagrees with what is inside it.
+ */
+test('the manifest and the package agree on the version', () => {
+  assert.equal(manifest.version, pkg.version);
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/, 'the store takes 1 to 4 dot-separated integers');
+});
 
 // The permission set is the product's central claim, so it is asserted rather than reviewed.
 test('nothing is requested at install beyond what the popup needs to open', () => {
