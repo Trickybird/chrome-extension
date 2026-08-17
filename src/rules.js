@@ -1,101 +1,111 @@
 /**
- * The per-tab rule table. Pure.
+ * The rule table. Pure.
  *
- *   3 allow   loopback and private addresses
- *   1 allow   a whole-page navigation back to our own console
- *   1 block   everything in this tab that is not the proxy
- *   1 block   everything the proxy's own origin asks for that is not the proxy
+ * One MARKER per routed tab, and one FENCE per gateway however many tabs use it:
  *
- * Only these two actions appear here, and that is the whole reason the extension never asks for
+ *   marker  1 rule   this tab is routed, and through this gateway
+ *   fence   2 rules  the proxied page's way home, and the block that holds it
+ *
+ * The fence holds the PAGE, not the tab. Everything a proxied page asks for carries the gateway as
+ * its initiator, so one rule scoped to that catches all of it, navigation included. The tab it sits
+ * in belongs to the person — an address they type, a bookmark, the back button, a link another
+ * application opens — and each of those arrives with no initiator at all, so a rule scoped to the tab
+ * refused them too. That cost them the tab and then cost them the page they went to, whose
+ * stylesheets and scripts were refused the same way.
+ *
+ * A request with no initiator raised from INSIDE a proxied page is the case a tab-scoped rule used to
+ * cover, and it means a document with an opaque origin. Those belong to the gateway, which is the
+ * only place they are closed for everyone rather than for the minority who installed this: it
+ * refuses a `data:` frame outright and repairs a `sandbox` that would make one, both measured. The
+ * extension never covered any of that for the people who arrive through the website, most of them.
+ *
+ * The fence is per gateway rather than per tab because it names no tab. Installing a copy of it
+ * behind every fenced tab meant the last tab to be forgotten took browser-wide containment with it,
+ * and meant N identical rules whose console lists were each frozen at a different moment.
+ *
+ * Only `allow` and `block` appear here, and that is the whole reason the extension never asks for
  * access to a site: Chrome requires host access for `redirect` and `modifyHeaders`, and for nothing
- * else. A tab is sent to the proxy by ordinary navigation instead, and these rules fence it in.
+ * else. A tab is sent to the proxy by ordinary navigation instead, and these rules hold what lands.
  */
 
 import { isPrivateHost } from './target.js';
 
-export const PRIORITY = { allowPrivate: 2, catchAll: 1 };
+export const PRIORITY = { pass: 2, fence: 1 };
 export const MAX_RULE_ID = 2147483647;
 
-/** Every request type, so the catch-all covers subresources and sockets too, not just documents. */
+/** Every request type, so the fence covers subresources and sockets too, not just documents. */
 const ALL_TYPES = /** @type {const} */ ([
   'main_frame', 'sub_frame', 'stylesheet', 'script', 'image', 'font', 'object',
   'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport',
   'webbundle', 'other',
 ]);
 
-/**
- * Addresses inside a local network. Three patterns rather than one: Chrome compiles each
- * regexFilter into a 2KB budget and the combined pattern is rejected at install time.
- */
-const LOCAL_PATTERNS = [
-  '^https?://([^./:]+|[^/:]+\\.local)(:[0-9]+)?([/?#]|$)',
-  '^https?://(127|10|192\\.168|169\\.254|172\\.(1[6-9]|2[0-9]|3[01]))\\.[0-9.]+(:[0-9]+)?([/?#]|$)',
-  '^https?://\\[?(::1|f[cde][0-9a-f]*:)',
-];
-
-/** Where the catch-all sits inside a base: the private patterns, then the way home. */
-const CATCH_ALL_OFFSET = LOCAL_PATTERNS.length + 1;
-const RULES_PER_TAB = CATCH_ALL_OFFSET + 2;
+export const FENCE_RULES = 2;
 
 /**
- * @param {{ tabId: number, origin: string, endpoint: string, consoleHosts: string[],
- *   baseId: number }} spec
- * @returns {chrome.declarativeNetRequest.Rule[]}
+ * The record that this tab is routed. Inert as a rule: it allows a whole-page load from the gateway,
+ * which the fence already permits by excluding that host, so it can widen nothing. `allow` is simply
+ * the action that does nothing, and a rule is the only place a service worker with no memory can
+ * read this back after a restart.
+ *
+ * @param {{ tabId: number, origin: string, endpoint: string, id: number }} spec
+ * @returns {chrome.declarativeNetRequest.Rule}
  */
-export function buildTabRules({ tabId, origin, endpoint, consoleHosts, baseId }) {
+export function buildMarker({ tabId, origin, endpoint, id }) {
   const target = new URL(origin);
   if (isPrivateHost(target.hostname)) {
     throw new Error(`refusing to route a private host: ${target.hostname}`);
   }
+  assertId(id);
+  return {
+    id,
+    priority: PRIORITY.pass,
+    action: { type: /** @type {const} */ ('allow') },
+    condition: {
+      tabIds: [tabId],
+      requestDomains: [new URL(endpoint).hostname],
+      resourceTypes: [/** @type {const} */ ('main_frame')],
+    },
+  };
+}
+
+/**
+ * The fence, and the one way out of it. Neither names a tab: a proxied page exists in tabs this
+ * extension never launched, and a service worker's request belongs to no tab at all.
+ *
+ * @param {{ endpoint: string, consoleHosts: string[], baseId: number }} spec
+ * @returns {chrome.declarativeNetRequest.Rule[]}
+ */
+export function buildFence({ endpoint, consoleHosts, baseId }) {
   // A fence with no way home is the defect this argument exists to prevent, so an empty list is a
   // programming error rather than a fence that quietly traps whoever is behind it.
   if (!consoleHosts.length) throw new Error('a fence needs at least one console host to allow');
-  if (!Number.isInteger(baseId) || baseId < 1 || baseId + RULES_PER_TAB - 1 > MAX_RULE_ID) {
-    throw new Error(`rule base id ${baseId} is out of range`);
-  }
+  assertId(baseId);
+  assertId(baseId + FENCE_RULES - 1);
   const endpointHost = new URL(endpoint).hostname;
 
   return [
-    ...LOCAL_PATTERNS.map((regexFilter, i) => ({
-      id: baseId + i,
-      priority: PRIORITY.allowPrivate,
-      action: { type: /** @type {const} */ ('allow') },
-      condition: { tabIds: [tabId], regexFilter, resourceTypes: [...ALL_TYPES] },
-    })),
-    // The page has ways home the extension never drives: the toolbar's home button, and the
-    // redirect the gateway sends once a session runs out. Both are a whole-page navigation to our
-    // own console, and the catch-all below blocked them, so a session simply expiring left the
-    // person on Chrome's page blaming an extension. Only `main_frame` passes: a proxied page still
-    // cannot fetch, ping or beacon our console, and those are the shapes that would carry a report
-    // about whoever is reading.
+    // The page has ways home the extension never drives: the toolbar's home button, and the redirect
+    // an expired session sends. Both are a whole-page navigation to our own site, and both belong to
+    // somebody who came through the web console with no extension in the story. Only the navigation
+    // is opened. A proxied page still cannot fetch, ping or beacon the console, and those are the
+    // shapes that would carry a report about whoever is reading.
     {
-      id: baseId + LOCAL_PATTERNS.length,
-      priority: PRIORITY.allowPrivate,
+      id: baseId,
+      priority: PRIORITY.pass,
       action: { type: /** @type {const} */ ('allow') },
       condition: {
-        tabIds: [tabId],
+        initiatorDomains: [endpointHost],
         requestDomains: [...consoleHosts],
         resourceTypes: [/** @type {const} */ ('main_frame')],
       },
     },
+    // Scoped by who asked rather than by which tab. Measured in a real Chromium: with this rule the
+    // page's own fetch to the real host is refused and the server sees nothing, and so is its fetch
+    // to a loopback address, which is why nothing private is excluded here.
     {
-      id: baseId + CATCH_ALL_OFFSET,
-      priority: PRIORITY.catchAll,
-      action: { type: /** @type {const} */ ('block') },
-      condition: {
-        tabIds: [tabId],
-        urlFilter: '*',
-        excludedRequestDomains: [endpointHost],
-        resourceTypes: [...ALL_TYPES],
-      },
-    },
-    // A service worker's request belongs to no tab, so every rule above misses it and a proxied page
-    // could reach the real site by registering one. Measured, then measured again with this rule:
-    // the same fetch is blocked and the server sees nothing. Scoped by who asked rather than by
-    // which tab, which is why it has no `tabIds`; it costs nothing outside the proxy's own origin.
-    {
-      id: baseId + CATCH_ALL_OFFSET + 1,
-      priority: PRIORITY.catchAll,
+      id: baseId + 1,
+      priority: PRIORITY.fence,
       action: { type: /** @type {const} */ ('block') },
       condition: {
         initiatorDomains: [endpointHost],
@@ -108,35 +118,46 @@ export function buildTabRules({ tabId, origin, endpoint, consoleHosts, baseId })
 }
 
 /**
- * Reads a tab's fence back out of the installed rules, so a restarted service worker needs no other
+ * Reads a tab's marker back out of the installed rules, so a restarted service worker needs no other
  * state to know which tabs are routed, and through which proxy.
  *
  * @param {chrome.declarativeNetRequest.Rule[]} installed
  * @param {number} tabId
  */
 export function readTabRule(installed, tabId) {
-  const fence = installed.find((r) =>
-    r.priority === PRIORITY.catchAll
-    && r.condition.tabIds?.length === 1
+  const marker = installed.find((r) => r.condition.tabIds?.length === 1
     && r.condition.tabIds[0] === tabId);
-  if (!fence) return null;
-  return {
-    baseId: fence.id - CATCH_ALL_OFFSET,
-    endpointHost: fence.condition.excludedRequestDomains?.[0] ?? '',
-  };
+  if (!marker) return null;
+  // Single-element by construction, and a marker is refused a second host, so this is not a guess.
+  return { id: marker.id, endpointHost: marker.condition.requestDomains?.[0] ?? '' };
 }
 
-/** Ids a base occupies. @param {number} baseId */
-export const ruleIdsForBase = (baseId) =>
-  Array.from({ length: RULES_PER_TAB }, (_, i) => baseId + i);
+/** Gateways that at least one tab is routed through. @param {chrome.declarativeNetRequest.Rule[]} installed */
+export const routedEndpoints = (installed) =>
+  new Set(installed.flatMap((r) => (r.condition.tabIds?.length
+    ? [r.condition.requestDomains?.[0] ?? ''] : [])));
 
 /**
- * Next free base. Tab ids are unusable here: three times a real one overflows int32.
- * @param {{ id: number }[]} installed
+ * Ids of the fence standing for one gateway, empty when none does.
+ * @param {chrome.declarativeNetRequest.Rule[]} installed @param {string} endpointHost
  */
-export function allocateBaseId(installed) {
+export const readFence = (installed, endpointHost) =>
+  installed.filter((r) => !r.condition.tabIds?.length
+    && r.condition.initiatorDomains?.[0] === endpointHost).map((r) => r.id);
+
+/**
+ * Ids nothing has taken. Deriving them from a tab id would collide, because Chrome reuses tab ids.
+ * @param {{ id: number }[]} installed @param {number} count
+ */
+export function allocateIds(installed, count) {
   const highest = installed.reduce((/** @type {number} */ max, r) => (r.id > max ? r.id : max), 0);
-  const next = highest + 1;
-  if (next + RULES_PER_TAB - 1 > MAX_RULE_ID) throw new Error('rule id space exhausted');
-  return next;
+  if (highest + count > MAX_RULE_ID) throw new Error('rule id space exhausted');
+  return Array.from({ length: count }, (_, i) => highest + 1 + i);
+}
+
+/** @param {number} id */
+function assertId(id) {
+  if (!Number.isInteger(id) || id < 1 || id > MAX_RULE_ID) {
+    throw new Error(`rule id ${id} is out of range`);
+  }
 }

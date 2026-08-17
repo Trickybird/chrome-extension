@@ -1,6 +1,8 @@
 /** Routes and unroutes a tab. The only module that touches rules or navigates. */
 
-import { allocateBaseId, buildTabRules, readTabRule, ruleIdsForBase } from './rules.js';
+import {
+  allocateIds, buildFence, buildMarker, FENCE_RULES, readFence, readTabRule, routedEndpoints,
+} from './rules.js';
 import { setBadge } from './badge.js';
 import { sessionMap } from './session-map.js';
 import { targetFragment, ticketFragment } from './fragment.js';
@@ -40,16 +42,21 @@ const forgetLabel = (tabId) => labelStore.update((records) => {
 });
 
 /**
- * Removes one tab's fence and nothing else. Clearing every rule would un-fence a tab that is still
- * showing a proxied page, silently and with nothing left to stop it reaching anywhere.
+ * Retires one tab's marker, and the gateway's fence with it once no tab is left behind that fence.
+ * Clearing every rule instead would un-fence tabs that are still showing a proxied page, silently
+ * and with nothing left to stop them reaching anywhere.
+ *
  * @param {number} tabId
  */
 async function clearTab(tabId) {
-  const rule = readTabRule(await sessionRules(), tabId);
-  if (rule) {
-    await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: ruleIdsForBase(rule.baseId),
-    });
+  const marker = readTabRule(await sessionRules(), tabId);
+  if (!marker) return;
+  await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [marker.id] });
+  const left = await sessionRules();
+  if (routedEndpoints(left).has(marker.endpointHost)) return;
+  const orphaned = readFence(left, marker.endpointHost);
+  if (orphaned.length) {
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: orphaned });
   }
 }
 
@@ -164,23 +171,31 @@ export async function fence({ tabId, targetOrigin, proxyUrl }) {
   if (!still) throw new RoutingError(ErrorCode.TAB_GONE, 'tab closed');
 
   const endpoint = new URL(proxyUrl).origin;
-  // Read here rather than in `buildTabRules`, which is pure and cannot await: the fence has to name
+  // Read here rather than in `buildFence`, which is pure and cannot await: the fence has to name
   // the addresses this install would open, so the page's own way home is never the thing we block.
   const consoleHosts = sessionOrigins(await frontEndpoints()).map((o) => new URL(o).hostname);
+  const endpointHost = new URL(endpoint).hostname;
   await clearTab(tabId);
-  const baseId = allocateBaseId(await sessionRules());
+  const standing = await sessionRules();
+  // The fence is shared, so a second tab through the same gateway adds a marker and nothing else.
+  const wanted = readFence(standing, endpointHost).length ? 0 : FENCE_RULES;
+  const [markerId, ...fenceIds] = allocateIds(standing, 1 + wanted);
   try {
     await chrome.declarativeNetRequest.updateSessionRules({
-      addRules: buildTabRules({ tabId, origin: targetOrigin, endpoint, consoleHosts, baseId }),
+      addRules: [
+        buildMarker({ tabId, origin: targetOrigin, endpoint, id: markerId }),
+        ...(wanted ? buildFence({ endpoint, consoleHosts, baseId: fenceIds[0] }) : []),
+      ],
     });
   } catch (e) {
     throw new RoutingError(ErrorCode.NO_SESSION, String(e));
   }
 
-  const installed = readTabRule(await sessionRules(), tabId);
-  if (!installed || installed.endpointHost !== new URL(endpoint).hostname) {
+  const settled = await sessionRules();
+  const installed = readTabRule(settled, tabId);
+  if (!installed || installed.endpointHost !== endpointHost || !readFence(settled, endpointHost).length) {
     await chrome.declarativeNetRequest
-      .updateSessionRules({ removeRuleIds: ruleIdsForBase(baseId) }).catch(() => {});
+      .updateSessionRules({ removeRuleIds: [markerId, ...fenceIds] }).catch(() => {});
     throw new RoutingError(ErrorCode.NO_SESSION, 'rules did not take');
   }
   await label(tabId, targetOrigin);
@@ -225,32 +240,34 @@ export async function sendAway(tabId, url) {
 }
 
 /**
- * The way out of a fence somebody walked into. They typed an address, the fence refused it, and the
- * page Chrome shows for that names an extension as the culprit and offers nothing further.
+ * Retires the record when the tab is plainly no longer on the proxy.
  *
- * The refusal stands: the request never left, and nothing here relaxes a rule. What changes is where
- * the tab ends up. It comes back to the console with the address already in the field, so one press
- * opens it through the proxy, and it loses its own fence on the way, because leaving was the point.
- * Every other fenced tab is untouched.
+ * Leaving is not an event anybody can hear. The fence holds the page, so an address the person types
+ * is simply allowed and nothing fires — which is the point, but it leaves the record of a routed tab
+ * outliving the routing, and a panel offering to stop what already stopped.
  *
- * @param {{ tabId: number, url: string }} req
+ * So this is not a watcher. It runs where somebody is already looking: the panel reads the tab's
+ * address to draw itself, and an address that is plainly not ours is the evidence. An address we
+ * cannot read is the ordinary case, because `activeTab` lapses the moment the tab navigates, and it
+ * proves nothing — acting on it would unfence a tab that never went anywhere.
+ *
+ * Our own console is not evidence either, and this is the sharp edge. It is what the tab shows for
+ * the whole of a launch, so a panel opened during one would retire the fence installed a moment
+ * earlier and let the tab arrive at the proxy with nothing holding it. It is also somewhere a
+ * proxied page can put the tab by itself, which would hand the page the timing.
+ *
+ * @param {number} tabId @param {string} [shownUrl]
  */
-export async function leaveFence({ tabId, url }) {
-  const endpoints = await frontEndpoints();
-  // Where the tab is going is worked out while the fence is still up. Choosing an address means
-  // probing one, which takes as long as the network does, and an unfenced tab still showing a
-  // proxied page is a state to pass through rather than to sit in.
-  const destination = isOurOwnConsole(url, endpoints)
-    // Already one of ours, so it is the address itself that was refused, not a site to open. Sending
-    // it through the field would offer to proxy our own console, and would drop the marker the page
-    // uses to say what happened.
-    ? url
-    : consoleUrl(sessionOrigins([await firstReachable(await preferred(normalize(endpoints)))])[0],
-      targetFragment(encodeTarget(url)));
-
-  await sendAway(tabId, destination).catch(() => {});
-  await setBadge(tabId, 'none');
-  return { ok: /** @type {true} */ (true) };
+export async function forgetIfLeft(tabId, shownUrl) {
+  if (!shownUrl || fromProxyUrl(shownUrl)) return;
+  try {
+    if (!/^https?:$/.test(new URL(shownUrl).protocol)) return;
+  } catch {
+    return;
+  }
+  if (isOurOwnConsole(shownUrl, await frontEndpoints())) return;
+  if (!readTabRule(await sessionRules(), tabId)) return;
+  await forgetTab(tabId);
 }
 
 /** Chrome reuses tab ids, so a closed tab must leave no rules behind. @param {number} tabId */

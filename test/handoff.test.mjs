@@ -230,11 +230,12 @@ test('cancelling when nothing is in flight moves nothing', async () => {
 test('cancelling takes the fence off before sending the tab home', async () => {
   await startLaunch({ tabId: 1, url: TARGET, originalUrl: 'https://news.example/list' });
   // Whatever put it there, a tab wearing a fence must not be sent anywhere the fence refuses.
+  // The shape `readTabRule` looks for: the tab-scoped rule that records which proxy this tab is on.
   rules = [{
     id: 4,
-    priority: 1,
-    action: { type: 'block' },
-    condition: { tabIds: [1], urlFilter: '*', excludedRequestDomains: ['gw-1.example'] },
+    priority: 2,
+    action: { type: 'allow' },
+    condition: { tabIds: [1], requestDomains: ['gw-1.example'], resourceTypes: ['main_frame'] },
   }];
 
   await cancelLaunch({ tabId: 1 });

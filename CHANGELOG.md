@@ -3,7 +3,45 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.3]
+
+### Changed
+
+- A routed tab is yours again. The fence used to refuse everything in that tab, so an address you
+  typed, a bookmark, the back button or a link another app opened into it all met our block and
+  Chrome's own page telling you to switch extensions off — and the page you did reach came up
+  broken, because its stylesheets and scripts were refused the same way. The fence now holds the
+  page instead of the tab: everything a proxied page asks for carries it as the initiator, and one
+  rule scoped to that catches all of it, navigation included. One marker per routed tab and one
+  fence per gateway, where there were six rules per tab.
+- Leaving the proxy now ends the session for that tab. Nothing can hear you leave — the navigation is
+  simply allowed, which is the point — so the record of a routed tab used to outlive the routing, and
+  the panel went on offering to stop something that had already stopped. The panel reads the tab's
+  address to draw itself, and an address that is plainly not ours retires the record right there. An
+  address it cannot read is the ordinary case and proves nothing, so it changes nothing. Neither is
+  our own console: the tab shows it for the whole of a launch, and a page can send the tab there
+  itself, so treating it as evidence would let a launch lose the fence it had just been given.
+- The escape that answered the old wall is gone with it. It reacted to our own block, and a page
+  could raise one on demand and be handed the console with an address of its choosing already in the
+  field, which is one press away from opening what the site picked rather than what you did.
+
+### Fixed
+
+- A proxied page could reach our own website with any kind of request, not only by navigating to it.
+  Opening the console by name so the toolbar's home button would work opened it to `fetch`, `ping`
+  and `sendBeacon` as well, and those are the shapes that would carry a report about whoever is
+  reading, to our own address where it would look like our own traffic. Only the whole-page
+  navigation is open now.
+- The fence stood once per routed tab, so forgetting the last one took browser-wide containment away
+  with it — including from a tab the page itself had opened, which is a moment the page gets to
+  choose. One fence answers for every tab behind it now, and it goes when the last of them does.
+- A device on your own network was exempt from the fence for the page as well as for you. A proxied
+  page that got rid of our service worker could ask for your router's configuration page and reach
+  it directly. The exemption is yours now, and the page is excluded from it.
+- Somebody using the proxy through our website, with no extension in the story at all, lost the
+  toolbar's way home as soon as any tab in that browser was routed by the extension: the rule that
+  catches what a proxied page asks for outside any tab excluded the gateway and nothing else. It
+  spares our own site now.
 
 ## [1.2.2]
 
