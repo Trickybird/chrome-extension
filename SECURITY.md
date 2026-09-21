@@ -26,6 +26,7 @@ it can be withdrawn from `chrome://extensions`.
 
 ## Releases
 
-Every release is built with `npm run package`, which pins timestamps and sorts entries so the
-archive is reproducible. The published sha256 should match a local build of the same tag; if it
-does not, that is worth a report.
+A release here carries notes and no archive: stamping one needs the catalogue addresses, which this
+repository deliberately does not hold. The archive comes from the store, and `npm run package` pins
+timestamps, entry order and the timezone, so a build of the matching tag reproduces it byte for byte.
+A mismatch is worth a report. `README.md` has the steps, including the one file you have to fill in.

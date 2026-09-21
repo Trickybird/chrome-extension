@@ -12,6 +12,9 @@ export const EXTENSION_BUILD = 'chrome';
 /** The one address that ships. Every other one arrives in the signed record; see fronts.js. */
 export const DEFAULT_ENDPOINTS = ['https://trickybird.com'];
 
+/** Last resort for an install that never reached a resolver. Stamped like the anchors; a stored record replaces it. */
+export const SEED_MIRRORS = /** @type {string[]} */ ([]);
+
 /**
  * The console a developer runs behind their own Caddy. It is named in `externally_connectable` so
  * the extension can be loaded straight from the repository and pointed at a local stack from the
@@ -33,7 +36,15 @@ export const DEV_ENDPOINT = 'https://tb-front.test';
  * to compare against, so the floor rises with each release that publishes a new list.
  */
 export const CATALOG = {
-  record: 'REDACTED',
+  // Empty here, stamped by `tools/package.mjs` from `anchors.json`, which git does not track. The
+  // names are asked in turn, so a second anchor at another registrar survives losing the first;
+  // what they must not do is sit in a tracked file, because this folder is mirrored to a public
+  // repository and a name in a public repository is a name somebody can complain about to its
+  // registrar. The shipped bundle still carries them and always will: a client that queries a name
+  // knows the name. What this buys is that they stay out of git history and out of a dragnet grep.
+  // `check-extension-publishable.mjs` refuses a `_fronts.` literal here, so a reintroduction is
+  // caught by the gate rather than by somebody reading a diff.
+  records: /** @type {string[]} */ ([]),
   publicKey: 'BHorlFrC9M___o2wBgfu1s2flc6C2vzs_DkC6THEwtpQ4h70WWpMH401cei5InjqtqNl2F9lGNLav4zBTS4zMIU',
   minVersion: 1,
 };

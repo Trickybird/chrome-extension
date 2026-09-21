@@ -6,12 +6,18 @@
  * everybody uses. Blackholing our domain does not stop Cloudflare from resolving it, so a censor has
  * to block the resolver itself, and that breaks DoH for everyone on his network.
  *
- * Two resolvers, tried in order, because one of them will eventually be the one that is blocked.
+ * Tried in order, because one of them will eventually be the one that is blocked. Every entry was
+ * measured answering this record from a Russian residential line on 2026-09-20; Quad9 and OpenDNS
+ * were tried there and did not answer, so they are not here. A resolver that cannot be reached from
+ * the networks this list exists for is a delay, not a spare.
  */
 
 const RESOLVERS = [
   'https://cloudflare-dns.com/dns-query',
   'https://dns.google/resolve',
+  'https://dns.adguard-dns.com/resolve',
+  'https://dns.nextdns.io/dns-query',
+  'https://dns.sb/dns-query',
 ];
 
 // Long enough for a slow mobile network, short enough that a tarpit cannot hold the launch.

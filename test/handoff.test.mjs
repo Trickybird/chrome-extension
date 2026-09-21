@@ -67,6 +67,46 @@ const say = (/** @type {any} */ msg, /** @type {any} */ sender = { origin: CONSO
     /** @type {any} */ (listener)(msg, sender, resolve);
   });
 
+// A front from the signed record cannot answer us, so the launch ends the moment the tab moves, and
+// the two things the reply would have done have to happen here. Clearing the badge is one of them.
+// Recording the address is not: a mirror is walked to and never pinned to, because a launch through
+// one proves only that the tab moved, and a pin bought with that takes the fence off every launch
+// after it.
+test('a mirror is walked to on every launch and never becomes the preferred address', async () => {
+  const MIRROR = 'https://mirror.example';
+  local.fronts = { version: 3, hosts: ['mirror.example'] };
+  const realFetch = globalThis.fetch;
+  // The brand is probed and refuses; the mirror is last in the walk, so it is taken unprobed.
+  globalThis.fetch = async () => { throw new Error('unreachable'); };
+  /** @type {string[]} */
+  const badgeText = [];
+  const realSetBadgeText = /** @type {any} */ (globalThis).chrome.action.setBadgeText;
+  /** @type {any} */ (globalThis).chrome.action.setBadgeText =
+    async (/** @type {any} */ arg) => { badgeText.push(arg?.text ?? ''); };
+  try {
+    await startLaunch({ tabId: 7, url: TARGET });
+
+    assert.ok(navigated[7].startsWith(MIRROR), `the tab went to the mirror: ${navigated[7]}`);
+    assert.ok(!navigated[7].includes('#ticket='), 'a mirror carries the address, not a ticket');
+    assert.equal(badgeText.at(-1), '', 'the badge does not stay on busy');
+    assert.equal(local.lastGoodEndpoint, undefined, 'and the mirror is not made preferred');
+
+    // Paying the probe again is the price of that, and it has to still end at the mirror.
+    await startLaunch({ tabId: 8, url: TARGET });
+    assert.ok(navigated[8].startsWith(MIRROR), `the block still routes: ${navigated[8]}`);
+
+    // The outage passes. The brand gets its turn back, and the fence with it.
+    globalThis.fetch = async () => new Response(null, { status: 200 });
+    await startLaunch({ tabId: 9, url: TARGET });
+    assert.ok(navigated[9].startsWith(CONSOLE), `the tab went back to the brand: ${navigated[9]}`);
+    assert.ok(navigated[9].includes('#ticket='), 'and that launch carries a ticket');
+    forgetLaunches(9, [navigated[9].split('#ticket=')[1]]);
+  } finally {
+    globalThis.fetch = realFetch;
+    /** @type {any} */ (globalThis).chrome.action.setBadgeText = realSetBadgeText;
+  }
+});
+
 /** Starts a launch and returns the nonce the extension parked it under. */
 /** @type {{ tabId: number, nonce: string }[]} */
 const started = [];

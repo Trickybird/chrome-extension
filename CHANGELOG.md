@@ -3,6 +3,30 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4]
+
+### Added
+
+- A second record to fall back on. The list of addresses the extension can open is published as a
+  signed record and read over encrypted DNS, so it can change without a new release. Until now
+  there was one record, on the same domain as the site, which is the one thing a lost domain takes
+  with it. There are two now, at different registrars, asked in turn, and losing either leaves the
+  other answering.
+- An install made behind a filter now has somewhere to start. Reading the signed record needs
+  encrypted DNS, and a filter that blocks that leaves a fresh install holding nothing but the
+  address it shipped with, which is the one already blocked. The build now carries one fallback
+  address to walk on until the record arrives.
+
+### Fixed
+
+- The badge no longer sticks after a launch through a fallback address. An address that cannot talk
+  back to the extension finishes the launch by itself, and nothing was left to turn the badge off,
+  so it stayed busy until you happened to open the panel on some unrelated tab.
+- A fallback address no longer becomes permanent. Such an address cannot talk back to the
+  extension, so a launch through one proves only that the tab moved, and recording it on that basis
+  meant a single outage sent every later launch through the fallback for good. Only an address that
+  answers the extension is recorded now, so the main one gets its turn back the moment it works.
+
 ## [1.2.3]
 
 ### Changed

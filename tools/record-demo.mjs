@@ -15,6 +15,17 @@
  * open. Nothing in it is staged twice over — the failure is a real refused request rendered by
  * Chrome's own error page, and the page that comes back is really fetched through the proxy.
  *
+ * The two states meet in the SAME pixels. The blocked page is the base layer and never fades; the
+ * page that came back through the proxy is revealed over it left to right, and both halves carry a
+ * caption while the reveal runs. The cut before this one played them one after the other, and the
+ * owner's reading of it was the whole problem: "it works in both, and it is not clear what we are
+ * showing". A viewer comparing from memory, muted, in a gallery, at a small size, is comparing
+ * nothing. The captions are what keep the reveal a comparison rather than a claim about where the
+ * tab is at that instant.
+ *
+ * The payoff stands alone for over two seconds before the routed panel returns. The panel is what
+ * covered the page in the previous cut, and the page being readable is the entire claim.
+ *
  * Two capture passes, because one browser cannot be in both states at once. The first runs against
  * the local stack with nothing stubbed and takes the three pages the story moves through. The second
  * stubs every host and drives the whole launch, which is the only way to reach a fenced tab and
@@ -23,6 +34,11 @@
  * The address bar is drawn, so it is told what to say. By default it says what the run actually
  * produced, which locally means `tb-p1.test`; pass `DEMO_GATEWAY_HOST` to render the address a
  * person would see in production. The path, the encoding and the page are the run's own either way.
+ *
+ * A production gateway address is a bare IP or a throwaway domain and never carries the brand, by
+ * decision rather than by accident (`gateway_public_base` in the ansible group vars). So the raw-
+ * looking address in the payoff is the real thing, and dressing it up as a branded domain would be
+ * the one fabrication in an asset that has none.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -238,7 +254,8 @@ async function capturePanels() {
  * the compositor happened to emit.
  *
  * @param {{ blocked: Shot, console: Shot, proxied: Shot, ready: Shot, routed: Shot,
- *   omniBlocked: string, omniConsole: string, omniProxied: string }} s
+ *   omniBlocked: string, omniConsole: string, omniProxied: string,
+ *   capBefore: string, capAfter: string }} s
  */
 function stage(s) {
   const at = (/** @type {number} */ sec) => `${((sec / SECONDS) * 100).toFixed(3)}%`;
@@ -277,39 +294,73 @@ html,body{ width:${W}px; height:${H}px; overflow:hidden; background:#0b0718; }
 .view img{ position:absolute; inset:0; width:${W}px; height:${VIEW}px; }
 .panel{ position:absolute; right:${panelRight}px; top:${panelTop}px; border-radius:14px;
   box-shadow:${CARD_SHADOW}; overflow:hidden; transform-origin:100% 0; opacity:0; }
+/* One slot, not two corners. Both captions sit at the same point and swap, so the eye has one place
+   to look instead of travelling between corners. Bottom LEFT rather than centre because during the
+   half-way hold the centre is the seam: a caption straddling it would not say which side it names. */
+.cap{ position:absolute; left:26px; bottom:26px; z-index:7; padding:10px 18px; border-radius:999px;
+  font:600 19px/1 system-ui; letter-spacing:.2px; box-shadow:${CARD_SHADOW}; white-space:nowrap; }
+.cap.before{ background:rgba(28,26,38,.88); color:#fff; }
+.cap.after{ background:#5b3df5; color:#fff; }
+.edge{ position:absolute; top:0; width:3px; height:${VIEW}px; z-index:6;
+  background:#5b3df5; box-shadow:0 0 18px 4px rgba(91,61,245,.55); }
 .cursor{ position:absolute; left:0; top:0; width:22px; height:22px; z-index:9; filter:drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 .tapped{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%;
   border:2px solid rgba(91,61,245,.85); opacity:0; z-index:8; }
 .seek *{ animation-play-state:paused !important; }
 
-@keyframes showBlocked{ 0%,43.5%{opacity:1} 46.5%,100%{opacity:0} }
-@keyframes showConsole{ 0%,43.5%{opacity:0} 46.5%,63.5%{opacity:1} 66.5%,100%{opacity:0} }
-@keyframes showProxied{ 0%,63.5%{opacity:0} 66.5%,100%{opacity:1} }
-@keyframes omniBlocked{ 0%,43.5%{opacity:1} 46.5%,100%{opacity:0} }
-@keyframes omniConsole{ 0%,43.5%{opacity:0} 46.5%,63.5%{opacity:1} 66.5%,100%{opacity:0} }
-@keyframes omniProxied{ 0%,63.5%{opacity:0} 66.5%,100%{opacity:1} }
-@keyframes panelReady{
-  0%,20.5%{ opacity:0; transform:scale(.94) translateY(-6px) }
-  23%,42%{ opacity:1; transform:none }
-  44%,100%{ opacity:0; transform:scale(.98) translateY(-4px) }
+/* The blocked page is the BASE layer and never fades: it is what the working page is revealed over,
+   so the two states meet in the same pixels instead of being compared from memory. */
+@keyframes showConsole{ 0%,33%{opacity:0} 36%,50%{opacity:1} 52%,100%{opacity:0} }
+/* The reveal runs from the right edge inwards, over one second, so the eye follows it rather than
+   being cut to. That direction is not taste: it leaves the page that will not open on the LEFT and
+   the one that did on the RIGHT, which is the order the captions under them are read in. */
+/* It stops at half and stays there. Run straight through, the reveal eats the error page before
+   anyone reads it: the error sits in the middle of the frame, so by the time the edge is halfway the
+   thing being compared against is already gone. The hold is the frame the whole cut exists for. */
+@keyframes wipeProxied{
+  0%,52%{ clip-path:inset(0 0 0 100%) }
+  57%,64%{ clip-path:inset(0 0 0 50%) }
+  68%,100%{ clip-path:inset(0 0 0 0) }
 }
+@keyframes wipeEdge{
+  0%,51.9%{ opacity:0; left:${W}px }
+  53%{ opacity:1; left:${(W * 0.72).toFixed(0)}px }
+  57%,64%{ opacity:1; left:${(W / 2).toFixed(0)}px }
+  67%{ opacity:1 }
+  68%,100%{ opacity:0; left:0 }
+}
+@keyframes omniBlocked{ 0%,33%{opacity:1} 36%,100%{opacity:0} }
+@keyframes omniConsole{ 0%,33%{opacity:0} 36%,50%{opacity:1} 52%,100%{opacity:0} }
+@keyframes omniProxied{ 0%,50%{opacity:0} 52%,100%{opacity:1} }
+/* The caption is off while the tab is on OUR console: the frame is neither state, and calling it
+   "without" would be wrong. It comes back for the hold, where it names the left half it sits in, and
+   swaps only once the reveal is complete and the whole frame is the page that came back. */
+@keyframes capBefore{ 0%,31%{opacity:1} 34%,50%{opacity:0} 53%,66%{opacity:1} 69%,100%{opacity:0} }
+@keyframes capAfter{ 0%,69%{opacity:0} 72%,100%{opacity:1} }
+@keyframes panelReady{
+  0%,20%{ opacity:0; transform:scale(.94) translateY(-6px) }
+  24%,33%{ opacity:1; transform:none }
+  36%,100%{ opacity:0; transform:scale(.98) translateY(-4px) }
+}
+/* Held back until the payoff has stood on its own: the page being readable IS the claim, and a panel
+   over it was what made the last cut unreadable. It returns only to show the way out. */
 @keyframes panelRouted{
-  0%,69%{ opacity:0; transform:scale(.94) translateY(-6px) }
-  72%,100%{ opacity:1; transform:none }
+  0%,85%{ opacity:0; transform:scale(.94) translateY(-6px) }
+  89%,100%{ opacity:1; transform:none }
 }
 @keyframes walk{
-  0%,10%{ transform:translate(${(W * 0.48).toFixed(0)}px, ${(BAR + OMNI + VIEW * 0.55).toFixed(0)}px) }
-  19%{ transform:translate(${icon.x}px, ${icon.y}px) }
-  35%{ transform:translate(${icon.x}px, ${icon.y}px) }
-  41%{ transform:translate(${readyButton.x.toFixed(0)}px, ${readyButton.y.toFixed(0)}px) }
-  46%{ transform:translate(${readyButton.x.toFixed(0)}px, ${readyButton.y.toFixed(0)}px) }
-  58%{ transform:translate(${openButton.x.toFixed(0)}px, ${openButton.y.toFixed(0)}px) }
-  63%{ transform:translate(${openButton.x.toFixed(0)}px, ${openButton.y.toFixed(0)}px) }
-  74%,100%{ transform:translate(${(W * 0.62).toFixed(0)}px, ${(BAR + OMNI + VIEW * 0.35).toFixed(0)}px) }
+  0%,8%{ opacity:1; transform:translate(${(W * 0.48).toFixed(0)}px, ${(BAR + OMNI + VIEW * 0.55).toFixed(0)}px) }
+  18%{ transform:translate(${icon.x}px, ${icon.y}px) }
+  28%{ transform:translate(${icon.x}px, ${icon.y}px) }
+  32%{ transform:translate(${readyButton.x.toFixed(0)}px, ${readyButton.y.toFixed(0)}px) }
+  36%{ transform:translate(${readyButton.x.toFixed(0)}px, ${readyButton.y.toFixed(0)}px) }
+  46%{ transform:translate(${openButton.x.toFixed(0)}px, ${openButton.y.toFixed(0)}px) }
+  50%{ opacity:1; transform:translate(${openButton.x.toFixed(0)}px, ${openButton.y.toFixed(0)}px) }
+  56%,100%{ opacity:0; transform:translate(${(W * 0.30).toFixed(0)}px, ${(BAR + OMNI + VIEW * 0.80).toFixed(0)}px) }
 }
-@keyframes tapIcon{ 19%{opacity:.9; transform:scale(.5)} 24%{opacity:0; transform:scale(1.15)} 0%,18.9%,24.1%,100%{opacity:0} }
-@keyframes tapPanel{ 42%{opacity:.9; transform:scale(.5)} 47%{opacity:0; transform:scale(1.15)} 0%,41.9%,47.1%,100%{opacity:0} }
-@keyframes tapOpen{ 63%{opacity:.9; transform:scale(.5)} 68%{opacity:0; transform:scale(1.15)} 0%,62.9%,68.1%,100%{opacity:0} }
+@keyframes tapIcon{ 18%{opacity:.9; transform:scale(.5)} 23%{opacity:0; transform:scale(1.15)} 0%,17.9%,23.1%,100%{opacity:0} }
+@keyframes tapPanel{ 33%{opacity:.9; transform:scale(.5)} 38%{opacity:0; transform:scale(1.15)} 0%,32.9%,38.1%,100%{opacity:0} }
+@keyframes tapOpen{ 47%{opacity:.9; transform:scale(.5)} 52%{opacity:0; transform:scale(1.15)} 0%,46.9%,52.1%,100%{opacity:0} }
 .anim{ animation-duration:${SECONDS}s; animation-timing-function:cubic-bezier(.4,0,.2,1);
   animation-fill-mode:both; animation-iteration-count:1; }
 </style>
@@ -328,9 +379,12 @@ html,body{ width:${W}px; height:${H}px; overflow:hidden; background:#0b0718; }
     <div class="puzzle"></div><div class="me"></div>
   </div>
   <div class="view">
-    <img class="anim" style="animation-name:showBlocked" src="${s.blocked.uri}">
+    <img src="${s.blocked.uri}">
     <img class="anim" style="animation-name:showConsole" src="${s.console.uri}">
-    <img class="anim" style="animation-name:showProxied" src="${s.proxied.uri}">
+    <img class="anim" style="animation-name:wipeProxied" src="${s.proxied.uri}">
+    <div class="edge anim" style="animation-name:wipeEdge"></div>
+    <div class="cap before anim" style="animation-name:capBefore">${s.capBefore}</div>
+    <div class="cap after anim" style="animation-name:capAfter">${s.capAfter}</div>
   </div>
   <div class="panel anim" style="animation-name:panelReady; width:${s.ready.w}px">
     <img src="${s.ready.uri}" style="width:${s.ready.w}px; display:block">
@@ -385,6 +439,8 @@ const html = stage({
   omniBlocked: new URL(TARGET).host + new URL(TARGET).pathname,
   omniConsole: consoleHost,
   omniProxied: gatewayHost + pages.landed.pathname,
+  capBefore: process.env.DEMO_CAP_BEFORE ?? 'Without TrickyBird',
+  capAfter: process.env.DEMO_CAP_AFTER ?? 'With TrickyBird',
 });
 writeFileSync(join(frameDir, 'stage.html'), html);
 const frames = await render(html, frameDir);

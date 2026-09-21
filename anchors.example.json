@@ -1,0 +1,5 @@
+{
+  "_comment": "Copy to anchors.json and put the real names in, shaped _fronts.<domain>. git does not track anchors.json; tools/package.mjs stamps it into the built bundle and IaC/scripts/publish-catalog.py reads the same file, so the two can never name different anchors. `mirrors` is optional and ships a last-resort address for an install that never reaches a resolver.",
+  "records": ["_fronts.<first-domain>", "_fronts.<second-domain>"],
+  "mirrors": ["<mirror-domain>"]
+}

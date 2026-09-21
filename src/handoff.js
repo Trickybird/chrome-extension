@@ -115,7 +115,15 @@ export async function startLaunch(req) {
   const { nonce } = await launch(req);
   // Only an address that can answer gets watched. A mirror carries the destination in its own URL
   // and has nothing to say back, so there is nothing to time out.
-  if (nonce) arm(nonce);
+  if (nonce) {
+    arm(nonce);
+    return { ok: /** @type {true} */ (true) };
+  }
+  // Nothing will arrive, so the badge has to be cleared here or it stays on `busy` until somebody
+  // opens the popup on an unrelated tab. The address is deliberately not recorded with it: the walk
+  // takes a mirror unprobed as its last candidate, so a launch through one says only that the tab
+  // moved. Pinning on that would put a transient outage between every later launch and its fence.
+  await setBadge(req.tabId, 'none');
   return { ok: /** @type {true} */ (true) };
 }
 

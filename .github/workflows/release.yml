@@ -1,5 +1,8 @@
 # Cutting a release from a tag rather than by hand, because a release published by a person names
 # that person on the releases page forever. The built-in token publishes as the actions bot.
+#
+# The release carries no archive. Building one stamps in the catalogue anchors, which are not in this
+# repository and cannot be, so the store archive is built where they live.
 name: Release
 
 on:
@@ -24,8 +27,8 @@ jobs:
       - run: npm ci
       - run: npm run check
 
-      # A tag that disagrees with the manifest publishes an archive under a version it does not
-      # carry, and the store is the place that would find out.
+      # A tag that disagrees with the manifest names a version it does not carry, and the store is
+      # the place that would find out.
       - name: the tag names the version the manifest carries
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -33,20 +36,14 @@ jobs:
           test "$tag" = "$manifest" \
             || { echo "tag says $tag, manifest says $manifest"; exit 1; }
 
-      - run: npm run package
-
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          zip=$(ls build/*.zip)
-          sha=$(sha256sum "$zip" | cut -d' ' -f1)
           # The section this version already has in the changelog, and nothing written twice.
           awk -v v="${GITHUB_REF_NAME#v}" '
             $0 == "## [" v "]" { f = 1; next }
             /^## \[/ { f = 0 }
             f' CHANGELOG.md > notes.md
-          printf '\nArchive `%s`, sha256 `%s`. Two builds of this commit produce the same bytes.\n' \
-            "$(basename "$zip")" "$sha" >> notes.md
-          gh release create "$GITHUB_REF_NAME" "$zip" \
+          gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" --notes-file notes.md

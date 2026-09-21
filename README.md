@@ -43,25 +43,35 @@ The toolbar icon or the right-click menu, then **Open with TrickyBird**. On a br
 blank tab there is nothing to route, and the popup says so.
 
 Install it from the
-[Chrome Web Store](https://chromewebstore.google.com/detail/fpkpkahleblaeljaenbjdcdelbghajfh), or run
+[Chrome Web Store](https://chromewebstore.google.com/detail/trickybird-web-proxy/fpkpkahleblaeljaenbjdcdelbghajfh), or run
 it from source: `chrome://extensions`, Developer mode, Load unpacked, this directory.
 
 ## Verify what you run
 
-The archive attached to each [release](https://github.com/Trickybird/chrome-extension/releases) is
-not something you have to take on trust. Check out that tag and build it yourself:
+There is no bundler and no minifier between the `src/` you read and the code that runs, so reading it
+is enough. Rebuilding it is the other half.
+
+A build needs one file this repository does not carry, `anchors.json`. It holds the two values that
+are stamped into `src/config.js` at build time: `records`, the names the extension asks DNS for, and
+`mirrors`, the address a new install falls back to before it has an answer. Both are in plain sight
+in that same file inside the archive your own copy came from, so read them out of it:
+
+```json
+{ "records": ["_fronts.first.example", "_fronts.second.test"], "mirrors": ["fallback.example"] }
+```
+
+Then check out the tag your copy claims and build it:
 
 ```
 npm run package   # writes build/*.zip and prints its sha256
 ```
 
-Build it on Linux and the sha256 is the one in the release notes, byte for byte. The archive is built
-by the release workflow on `ubuntu-latest`, and `zip` differs enough between platforms that the same
-files packed on macOS come out to a different hash. Timestamps are pinned and entries are sorted, so
-the build is reproducible; the platform is the one thing you have to match.
+Timestamps, entry order and the timezone are all pinned, so any machine packs a given tag to the same
+bytes, and yours must match the archive you read those values out of.
 
-There is no bundler and no minifier between the `src/` you read and the code that runs, so reading it
-is enough, and rebuilding it is the proof.
+The names are withheld from a public git history, not from you. A list of addresses that route around
+a block is the first thing worth blocking, and a signed DNS record can be replaced in an afternoon
+where a git history cannot.
 
 ## Permissions
 

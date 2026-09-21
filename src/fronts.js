@@ -8,11 +8,18 @@
  * one afternoon with the archive.
  */
 
-import { CATALOG, readSettings, sessionOrigins } from './config.js';
-import { acceptsCatalog, parseCatalog, verifyCatalog } from './catalog.js';
+import { CATALOG, readSettings, SEED_MIRRORS, sessionOrigins } from './config.js';
+import {
+  acceptsCatalog,
+  parseCatalog,
+  parseRevocation,
+  verifyCatalog,
+  verifyRevocation,
+} from './catalog.js';
 import { lookupTxt } from './doh.js';
 
 const KEY = 'fronts';
+const REVOKED = 'fronts-revoked';
 
 // One round trip on a working network. Past this the address is treated as unreachable, and being
 // wrong about that is cheap: the walk moves on and nothing is remembered.
@@ -27,6 +34,23 @@ export async function storedCatalog() {
 }
 
 /**
+ * Whether the signing key has been taken out of trust. The stored form is the record itself and the
+ * signature is checked on every read, not once on the way in: a flag would be a claim about the
+ * past, and this has to be a claim about the key.
+ *
+ * Terminal by construction. Nothing lifts a revocation, because nothing the key can sign is trusted
+ * after it. A client comes back only through a build carrying a different pinned key.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function catalogRevoked() {
+  const text = /** @type {unknown} */ ((await chrome.storage.local.get(REVOKED))[REVOKED]);
+  if (typeof text !== 'string') return false;
+  const revocation = parseRevocation(text, CATALOG.publicKey);
+  return revocation ? verifyRevocation(revocation, CATALOG.publicKey) : false;
+}
+
+/**
  * Looks the record up, verifies it, and keeps it only if it is newer than what we hold. Every
  * failure leaves the stored list exactly as it was: a network that answers nothing and a network
  * that answers a lie must both end with the addresses that worked last time.
@@ -34,7 +58,39 @@ export async function storedCatalog() {
  * @returns {Promise<boolean>} whether the stored list changed
  */
 export async function refreshCatalog() {
-  const records = await lookupTxt(CATALOG.record);
+  // Nothing to learn once the key is out of trust, and asking anyway would be two observable
+  // requests a wake-up for no possible answer. The kill switch takes the lookup with it.
+  if (await catalogRevoked()) return false;
+
+  // Each anchor in turn, and the first one that yields anything usable ends the round. An anchor
+  // that answers nothing is one whose domain is gone; an anchor that answers rubbish is one whose
+  // domain is in somebody else's hands, and neither can produce a record this key signed.
+  for (const name of CATALOG.records) {
+    const records = await lookupTxt(name);
+    if (records.length && (await applyRecords(records))) return true;
+  }
+  return false;
+}
+
+/**
+ * What one anchor's answer is worth: a revocation if it carries one, otherwise a newer list.
+ *
+ * @param {string[]} records
+ * @returns {Promise<boolean>} whether anything was stored
+ */
+async function applyRecords(records) {
+  // The revocation is read before the catalog, so a round carrying both never stores a list. The
+  // write lands BEFORE the list is dropped: a client that died between the two would otherwise
+  // wake with no list and its trust in the key intact, and learn the poisoned list all over again.
+  for (const text of records) {
+    const revocation = parseRevocation(text, CATALOG.publicKey);
+    if (!revocation) continue;
+    if (!(await verifyRevocation(revocation, CATALOG.publicKey))) continue;
+    await chrome.storage.local.set({ [REVOKED]: text });
+    await chrome.storage.local.remove(KEY);
+    return true;
+  }
+
   const stored = await storedCatalog();
   const floor = CATALOG.minVersion;
 
@@ -57,8 +113,15 @@ export async function refreshCatalog() {
  */
 export async function frontEndpoints() {
   const { endpoints } = await readSettings();
-  const fromRecord = (await storedCatalog())?.hosts.map((h) => `https://${h}`) ?? [];
-  return [...new Set([...endpoints, ...fromRecord])];
+  // A revoked key means the record is worth nothing, so the walk is the addresses this build ships
+  // with and the one the owner typed. The removal in `refreshCatalog` is hygiene; this check is the
+  // mechanism, because storage is state and state can come back.
+  if (await catalogRevoked()) return [...new Set(endpoints)];
+  const stored = await storedCatalog();
+  const fromRecord = stored?.hosts.map((h) => `https://${h}`) ?? [];
+  // A DoH-blocking filter leaves a fresh install with no list; the seed is what it walks on.
+  const seed = stored ? [] : SEED_MIRRORS.map((h) => `https://${h}`);
+  return [...new Set([...endpoints, ...fromRecord, ...seed])];
 }
 
 /**
